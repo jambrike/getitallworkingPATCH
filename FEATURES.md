@@ -30,6 +30,9 @@
   - scroll the browser page
   - wait briefly for pages or menus to load
   - save a file
+  - remember contacts by name and email
+  - look up saved contacts
+  - send email through configured SMTP after approval
 - Safety approval gate for high-risk actions involving passwords, payments, banking, sending, deleting, uploads, downloads, purchases, installs, private codes, account recovery, and similar irreversible steps.
 - Root launcher:
 
@@ -40,6 +43,8 @@ START_VOICE=1 ./run-companion.sh
 ## Current Limitations
 
 - Desktop-wide control is not enabled; clicks and scrolling happen inside the Playwright browser window, and file saves stay inside the feature-agent outputs folder.
+- Email sending requires SMTP settings in `.env`; Gmail users should use an app password.
+- Sending email always pauses for approval before the message is sent.
 - Voice wake detection still uses local Vosk, so very loud rooms can still miss the wake word.
 - After the wake word is detected, the recent audio clip is transcribed with OpenAI by default for better noisy-room accuracy.
 - Voice only responds when the wake word and question are in the same phrase, such as `grandson what am I looking at`.

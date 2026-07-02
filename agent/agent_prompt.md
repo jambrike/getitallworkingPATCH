@@ -39,6 +39,9 @@ Return JSON only.
 {"action": "scroll", "delta_y": 600}
 {"action": "wait", "milliseconds": 1000}
 {"action": "save_file", "filename": "result.md", "content": "markdown content here"}
+{"action": "remember_contact", "name": "Jane", "email": "jane@example.com"}
+{"action": "lookup_contact", "name": "Jane"}
+{"action": "send_email", "to": "jane@example.com", "subject": "Hello", "body": "Email body here"}
 {"action": "ask_user", "question": "Should I continue?"}
 {"action": "done", "summary": "What was completed"}
 ```
@@ -54,7 +57,10 @@ Return JSON only.
 - If the user asks to open a known website, use `open_url` with a full `https://` URL.
 - Use `click_text` for named buttons/links. Use `click_at` only when the screen position is clear.
 - Use `scroll` when the needed item may be lower on the page.
-- Ask first before anything involving payment, passwords, private codes, sending/posting, deletion, installs, uploads, downloads, purchases, or account recovery.
+- Use `remember_contact` when the user gives a person's email address to remember.
+- Use `lookup_contact` when the user asks who is saved or when you need a saved email address.
+- Use `send_email` only when the recipient, subject, and body are clear.
+- Ask first before anything involving payment, passwords, private codes, sending emails/posting, deletion, installs, uploads, downloads, purchases, or account recovery.
 - Do not repeat passwords, card numbers, codes, private messages, or other sensitive details.
 - If the user says `reset context`, `forget that`, or `cancel`, treat that as a control request.
 - Use only the exact available actions.

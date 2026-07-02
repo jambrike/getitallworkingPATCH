@@ -29,6 +29,9 @@ SUPPORTED_ACTIONS = {
     "scroll",
     "wait",
     "save_file",
+    "remember_contact",
+    "lookup_contact",
+    "send_email",
     "ask_user",
     "done",
 }
@@ -40,7 +43,7 @@ You must respond with JSON only.
 Choose exactly one action at a time.
 Do not spend money.
 Do not submit forms.
-Do not send emails or messages.
+Do not send emails or messages unless the user clearly asked and confirmed.
 Do not delete files.
 Do not install software.
 Do not access password managers.
@@ -61,6 +64,9 @@ Supported actions:
 {"action":"scroll","delta_y":600}
 {"action":"wait","milliseconds":1000}
 {"action":"save_file","filename":"result.md","content":"markdown content here"}
+{"action":"remember_contact","name":"Jane","email":"jane@example.com"}
+{"action":"lookup_contact","name":"Jane"}
+{"action":"send_email","to":"jane@example.com","subject":"Hello","body":"Email body here"}
 {"action":"ask_user","question":"Should I continue?"}
 {"action":"done","summary":"What was completed"}
 
@@ -214,6 +220,8 @@ class BrowserAgent:
             )
             self.history.append({"type": "saved_file", "path": str(path)})
             result = f"Saved {path}"
+        elif name in {"remember_contact", "lookup_contact", "send_email"}:
+            result = "Use the companion service for contact and email actions."
         elif name == "ask_user":
             answer = input(f"{action['question']} > ")
             self.history.append(

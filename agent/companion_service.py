@@ -9,7 +9,9 @@ import time
 import base64
 import io
 import re
+import smtplib
 from collections import deque
+from email.message import EmailMessage
 from pathlib import Path
 from typing import Any
 
@@ -22,6 +24,8 @@ ROOT_DIR = Path(__file__).resolve().parents[1]
 AGENT_DIR = Path(__file__).resolve().parent
 SCREENSHOT_DIR = ROOT_DIR / "screenshot"
 FEATURES_DIR = ROOT_DIR / "features" / "laptop-agent-mvp"
+DATA_DIR = ROOT_DIR / "data"
+CONTACTS_FILE = DATA_DIR / "contacts.json"
 
 for import_path in (str(AGENT_DIR), str(SCREENSHOT_DIR), str(FEATURES_DIR)):
     if import_path not in sys.path:
@@ -120,6 +124,9 @@ DECISION_SCHEMA: dict[str, Any] = {
                                 "scroll",
                                 "wait",
                                 "save_file",
+                                "remember_contact",
+                                "lookup_contact",
+                                "send_email",
                                 "ask_user",
                                 "done",
                             ],
@@ -155,6 +162,10 @@ Priorities:
 9. If the user asks to open a website, use open_url with a full https URL.
 10. Use click_text for visible labels and click_at only when the screenshot
     makes the target position clear. Use scroll if the page likely needs it.
+11. Use remember_contact when the user gives you a person's email address to
+    save. Use lookup_contact when you need a saved email address. Use send_email
+    only when recipient, subject, and body are clear.
+12. Sending email is allowed, but it must pause for approval before it is sent.
 
 Return JSON only.
 
@@ -312,6 +323,7 @@ class BrowserActionRunner:
     def __init__(self) -> None:
         self.session: Any | None = None
         self.outputs_dir = FEATURES_DIR / "outputs"
+        self.contacts = ContactBook(CONTACTS_FILE)
 
     def close(self) -> None:
         if self.session is not None:
@@ -327,6 +339,19 @@ class BrowserActionRunner:
             return str(action.get("question") or "Please confirm what you want me to do.")
         if name == "done":
             return str(action.get("summary") or "Finished.")
+        if name == "save_file":
+            path = save_output_file(
+                self.outputs_dir,
+                str(action.get("filename") or "output.md"),
+                str(action.get("content") or ""),
+            )
+            return f"Saved {path}"
+        if name == "remember_contact":
+            return self.contacts.remember(str(action["name"]), str(action["email"]))
+        if name == "lookup_contact":
+            return self.contacts.lookup(str(action["name"]))
+        if name == "send_email":
+            return send_email_action(action)
 
         browser = self._browser()
         if name == "open_url":
@@ -348,13 +373,6 @@ class BrowserActionRunner:
             return browser.scroll(float(action.get("delta_y", 600)))
         if name == "wait":
             return browser.wait(int(action.get("milliseconds", 1000)))
-        if name == "save_file":
-            path = save_output_file(
-                self.outputs_dir,
-                str(action.get("filename") or "output.md"),
-                str(action.get("content") or ""),
-            )
-            return f"Saved {path}"
         raise ValueError(f"Unsupported action: {name}")
 
     def _browser(self) -> Any:
@@ -362,6 +380,118 @@ class BrowserActionRunner:
             self.session = BrowserSession()
             self.session.__enter__()
         return self.session
+
+
+class ContactBook:
+    def __init__(self, path: Path) -> None:
+        self.path = path
+        self.lock = threading.Lock()
+
+    def remember(self, name: str, email: str) -> str:
+        clean_name = normalize_contact_name(name)
+        clean_email = normalize_email(email)
+        if not clean_name:
+            raise ValueError("Contact name cannot be empty.")
+        if not clean_email:
+            raise ValueError("Contact email is not valid.")
+
+        with self.lock:
+            contacts = self._load()
+            contacts[clean_name] = {
+                "name": name.strip(),
+                "email": clean_email,
+                "updated_at": int(time.time()),
+            }
+            self._save(contacts)
+
+        return f"Remembered {name.strip()} as {clean_email}."
+
+    def lookup(self, name: str) -> str:
+        clean_name = normalize_contact_name(name)
+        contacts = self._load()
+        contact = contacts.get(clean_name)
+        if not contact:
+            return f"No saved contact found for {name}."
+        return f"{contact['name']}: {contact['email']}"
+
+    def summary(self) -> list[dict[str, str]]:
+        contacts = self._load()
+        return [
+            {"name": item["name"], "email": item["email"]}
+            for item in sorted(contacts.values(), key=lambda contact: contact["name"].lower())
+        ]
+
+    def _load(self) -> dict[str, Any]:
+        if not self.path.exists():
+            return {}
+        try:
+            data = json.loads(self.path.read_text(encoding="utf-8"))
+        except json.JSONDecodeError:
+            return {}
+        return data if isinstance(data, dict) else {}
+
+    def _save(self, contacts: dict[str, Any]) -> None:
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        self.path.write_text(json.dumps(contacts, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def normalize_contact_name(name: str) -> str:
+    return re.sub(r"\s+", " ", str(name or "").strip().lower())
+
+
+def normalize_email(email: str) -> str:
+    cleaned = str(email or "").strip()
+    if re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", cleaned):
+        return cleaned
+    return ""
+
+
+def send_email_action(action: dict[str, Any]) -> str:
+    to_email = resolve_email_recipient(str(action.get("to") or action.get("name") or ""))
+    subject = str(action.get("subject") or "").strip()
+    body = str(action.get("body") or "").strip()
+
+    if not to_email:
+        raise ValueError("Email recipient is missing or not saved in contacts.")
+    if not subject:
+        raise ValueError("Email subject is required.")
+    if not body:
+        raise ValueError("Email body is required.")
+
+    smtp_host = os.getenv("SMTP_HOST")
+    smtp_port = int(os.getenv("SMTP_PORT", "587"))
+    smtp_user = os.getenv("SMTP_USER")
+    smtp_password = os.getenv("SMTP_PASSWORD")
+    from_email = os.getenv("SMTP_FROM") or smtp_user
+    from_name = os.getenv("SMTP_FROM_NAME", "Grandson")
+
+    if not smtp_host or not smtp_user or not smtp_password or not from_email:
+        raise RuntimeError("Email is not configured. Set SMTP_HOST, SMTP_PORT, SMTP_USER, SMTP_PASSWORD, and SMTP_FROM.")
+
+    message = EmailMessage()
+    message["From"] = f"{from_name} <{from_email}>"
+    message["To"] = to_email
+    message["Subject"] = subject
+    message.set_content(body)
+
+    with smtplib.SMTP(smtp_host, smtp_port, timeout=20) as smtp:
+        smtp.starttls()
+        smtp.login(smtp_user, smtp_password)
+        smtp.send_message(message)
+
+    return f"Sent email to {to_email}."
+
+
+def resolve_email_recipient(recipient: str) -> str:
+    recipient = recipient.strip()
+    if normalize_email(recipient):
+        return recipient
+
+    contacts = ContactBook(CONTACTS_FILE)
+    contact = contacts._load().get(normalize_contact_name(recipient))
+    if contact:
+        return str(contact.get("email") or "")
+    return ""
 
 
 state = CompanionState()
@@ -501,6 +631,7 @@ def choose_decision(user_prompt: str) -> dict[str, Any]:
                 {
                     "user_prompt": user_prompt,
                     "recent_memory": state.context_text(),
+                    "saved_contacts": state.action_runner.contacts.summary(),
                     "capabilities": CAPABILITIES,
                     "screen_available": screenshot is not None,
                     "screen_error": state.screen_buffer.last_error,
@@ -606,8 +737,14 @@ def slugify_site_target(target: str) -> str:
 
 
 def should_require_approval(action: dict[str, Any]) -> bool:
+    action_name = str(action.get("action") or "")
+    if action_name in {"remember_contact", "lookup_contact"}:
+        return False
+    if action_name == "send_email":
+        return True
+
     combined = json.dumps(action, ensure_ascii=False).lower()
-    if str(action.get("action") or "") == "type_text" and any(
+    if action_name == "type_text" and any(
         term in combined for term in SENSITIVE_TYPE_TERMS
     ):
         return True

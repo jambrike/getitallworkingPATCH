@@ -74,3 +74,25 @@ Voice defaults to `VOICE_STT_MODE=hybrid`: Vosk listens cheaply for the wake wor
 ## Safety
 
 The first version only automates the Playwright browser and safe file saves. It does not control arbitrary Mac apps. Risky actions involving passwords, payments, banking, messages, uploads, downloads, or other irreversible steps require explicit approval before they run.
+
+## Email And Contacts
+
+Grandson can remember contacts and send email through SMTP. Add these to `.env`:
+
+```env
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USER=your_email@gmail.com
+SMTP_PASSWORD=your_app_password_here
+SMTP_FROM=your_email@gmail.com
+SMTP_FROM_NAME=Grandson
+```
+
+Example prompts:
+
+```text
+remember Jane as jane@example.com
+send Jane an email saying I will call tomorrow
+```
+
+Contacts are stored locally in `data/contacts.json`. Email sending always asks for approval before sending.
