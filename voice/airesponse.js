@@ -1,4 +1,6 @@
 const fs = require('fs');
+const http = require('http');
+const https = require('https');
 const path = require('path');
 const { spawn } = require('child_process');
 
@@ -14,19 +16,7 @@ async function sendToAI(text) {
   if (!prompt) return '';
 
   try {
-    const response = await fetch(`${companionUrl()}/prompt`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ source: 'voice', text: prompt })
-    });
-
-    if (!response.ok) {
-      throw new Error(`Companion service returned HTTP ${response.status}.`);
-    }
-
-    const payload = await response.json();
+    const payload = await postJson(`${companionUrl()}/prompt`, { source: 'voice', text: prompt });
     const say = String(payload.say || '').trim();
     console.log('[Companion Reply]:', say || '(nothing to say)');
 
@@ -72,6 +62,49 @@ function speakWithOpenAITTS(text) {
 }
 
 module.exports = { sendToAI };
+
+function postJson(url, payload) {
+  const parsedUrl = new URL(url);
+  const body = JSON.stringify(payload);
+  const transport = parsedUrl.protocol === 'https:' ? https : http;
+
+  return new Promise((resolve, reject) => {
+    const request = transport.request(
+      parsedUrl,
+      {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Content-Length': Buffer.byteLength(body)
+        }
+      },
+      (response) => {
+        let responseBody = '';
+
+        response.setEncoding('utf8');
+        response.on('data', (chunk) => {
+          responseBody += chunk;
+        });
+        response.on('end', () => {
+          if (response.statusCode < 200 || response.statusCode >= 300) {
+            reject(new Error(`Companion service returned HTTP ${response.statusCode}.`));
+            return;
+          }
+
+          try {
+            resolve(JSON.parse(responseBody));
+          } catch (error) {
+            reject(new Error(`Companion service returned invalid JSON: ${error.message}`));
+          }
+        });
+      }
+    );
+
+    request.on('error', reject);
+    request.write(body);
+    request.end();
+  });
+}
 
 function loadEnvFile(filePath) {
   if (!fs.existsSync(filePath)) return;
