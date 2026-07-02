@@ -62,6 +62,7 @@ STATE_DIR="\$HOME/Library/Application Support/Grandson"
 LOG_FILE="\$LOG_DIR/companion.log"
 PID_FILE="\$STATE_DIR/grandson.pid"
 HEALTH_URL="http://127.0.0.1:8765/health"
+APP_PATH_EXPORT="/Library/Frameworks/Python.framework/Versions/3.11/bin:/opt/homebrew/bin:/usr/local/bin:\$HOME/.nvm/versions/node/v20.20.0/bin:\$HOME/.nvm/versions/node/v16.20.2/bin:/usr/bin:/bin:/usr/sbin:/sbin"
 
 mkdir -p "\$LOG_DIR" "\$STATE_DIR"
 
@@ -81,7 +82,7 @@ fi
 
 cd "\$ROOT_DIR"
 notify "Starting Grandson..."
-/usr/bin/env START_VOICE=1 ./run-companion.sh >>"\$LOG_FILE" 2>&1 &
+/usr/bin/nohup /bin/zsh -lc "export PATH=\"\$APP_PATH_EXPORT:\\\$PATH\"; cd \"\$ROOT_DIR\"; START_VOICE=1 ./run-companion.sh" >>"\$LOG_FILE" 2>&1 &
 echo "\$!" >"\$PID_FILE"
 
 exit 0
