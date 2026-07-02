@@ -65,6 +65,7 @@ KNOWN_SITES = {
     "gmail": "https://mail.google.com",
     "github": "https://github.com",
     "spotify": "https://open.spotify.com",
+    "netflix": "https://www.netflix.com",
 }
 DECISION_SCHEMA: dict[str, Any] = {
     "name": "companion_decision",
