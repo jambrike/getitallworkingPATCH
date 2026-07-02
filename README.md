@@ -59,6 +59,8 @@ START_VOICE=1 ./run-companion.sh
 
 The service listens on `http://127.0.0.1:8765`. The overlay and voice listener both send prompts there. Screenshots are kept in memory and the newest screenshot is resized before being sent to OpenAI only when a prompt is received.
 
+Click `Speak` in the overlay to record a short voice prompt directly. The overlay lights up while it is awake/listening, transcribes the clip with OpenAI, then sends the prompt to the same companion service.
+
 For voice, say the wake word and question in the same phrase:
 
 ```text

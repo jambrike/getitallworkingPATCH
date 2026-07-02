@@ -5,6 +5,8 @@
 - Floating Electron overlay for typed prompts.
 - Overlay reply bubble that shows the latest assistant answer above the input.
 - Overlay Send and Speak buttons, with Enter as a send shortcut.
+- Speak button records a short push-to-talk voice prompt, transcribes it, and sends it to Grandson.
+- Awake glow/light when the Speak button is recording or the `grandson` wake word is detected.
 - Spoken replies using OpenAI TTS.
 - Hybrid voice listener with local Vosk wake detection and optional OpenAI transcription cleanup.
 - In-memory screenshot buffer for screen context.

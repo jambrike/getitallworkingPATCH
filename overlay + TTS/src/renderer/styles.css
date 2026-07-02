@@ -99,6 +99,20 @@ textarea {
   border-radius: 50%;
   background: #31c96b;
   box-shadow: 0 0 0 4px rgba(49, 201, 107, 0.16);
+  transition:
+    background 220ms ease,
+    box-shadow 260ms ease,
+    transform 260ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.overlay-shell[data-status="awake"] .status-dot,
+.overlay-shell.is-awake .status-dot {
+  background: #69e7ff;
+  box-shadow:
+    0 0 0 5px rgba(105, 231, 255, 0.22),
+    0 0 22px rgba(47, 191, 215, 0.72);
+  transform: scale(1.3);
+  animation: awakePulse 1.15s ease-in-out infinite;
 }
 
 .overlay-shell[data-status="thinking"] .status-dot {
@@ -109,6 +123,14 @@ textarea {
 .overlay-shell[data-status="speaking"] .status-dot {
   background: #4797ff;
   box-shadow: 0 0 0 4px rgba(71, 151, 255, 0.16);
+}
+
+.overlay-shell[data-status="awake"] .mascot-panel,
+.overlay-shell.is-awake .mascot-panel {
+  background:
+    radial-gradient(circle at 28% 22%, #fff1b4, transparent 30%),
+    radial-gradient(circle at 50% 50%, rgba(105, 231, 255, 0.64), transparent 48%),
+    linear-gradient(160deg, #b8f4e4, #c7e8ff);
 }
 
 .overlay-shell[data-status="error"] .status-dot {
@@ -346,6 +368,11 @@ textarea {
   box-shadow: 0 1px 2px rgba(35, 49, 63, 0.06);
 }
 
+.prompt-actions button:disabled {
+  cursor: wait;
+  opacity: 0.72;
+}
+
 .primary-action:hover,
 .secondary-action:hover {
   border-color: rgba(80, 134, 176, 0.42);
@@ -402,5 +429,19 @@ textarea {
   }
   50% {
     transform: translateY(-3px) scale(1.025);
+  }
+}
+
+@keyframes awakePulse {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 5px rgba(105, 231, 255, 0.2),
+      0 0 18px rgba(47, 191, 215, 0.64);
+  }
+  50% {
+    box-shadow:
+      0 0 0 9px rgba(105, 231, 255, 0.12),
+      0 0 30px rgba(47, 191, 215, 0.8);
   }
 }

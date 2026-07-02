@@ -1,4 +1,6 @@
 const fs = require('fs');
+const http = require('http');
+const https = require('https');
 const os = require('os');
 const path = require('path');
 const vosk = require('vosk');
@@ -6,6 +8,7 @@ const mic = require('mic');
 const { spawn } = require('child_process');
 const { sendToAI, isAssistantSpeaking } = require('./airesponse');
 
+const DEFAULT_COMPANION_URL = 'http://127.0.0.1:8765';
 const MODEL_PATH = path.join(__dirname, 'model'); // Vosk model folder
 const ROOT_ENV = path.join(__dirname, '..', '.env');
 
@@ -82,6 +85,8 @@ function handleTranscript(text) {
 }
 
 async function handleWakeTranscript(voskPrompt) {
+    notifyVoiceAwake();
+
     if (isTranscribing) {
         console.log("Wake word detected, but transcription is already running.");
         return;
@@ -122,6 +127,42 @@ async function handleWakeTranscript(voskPrompt) {
     }
 
     console.log(`Wake word detected. Say "${WAKE_WORD}" plus your question in one sentence.`);
+}
+
+function notifyVoiceAwake() {
+    const url = `${companionUrl()}/voice-status`;
+    postJson(url, { status: 'awake', duration_ms: 6500 }).catch(() => {});
+}
+
+function companionUrl() {
+    return (process.env.COMPANION_URL || DEFAULT_COMPANION_URL).replace(/\/$/, '');
+}
+
+function postJson(url, payload) {
+    const parsedUrl = new URL(url);
+    const body = JSON.stringify(payload);
+    const transport = parsedUrl.protocol === 'https:' ? https : http;
+
+    return new Promise((resolve, reject) => {
+        const request = transport.request(
+            parsedUrl,
+            {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Content-Length': Buffer.byteLength(body)
+                }
+            },
+            (response) => {
+                response.resume();
+                response.on('end', resolve);
+            }
+        );
+
+        request.on('error', reject);
+        request.write(body);
+        request.end();
+    });
 }
 
 function choosePrompt(cleanPrompt, cleanText, voskPrompt) {

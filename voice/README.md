@@ -51,3 +51,5 @@ VOICE_TRANSCRIBE_LOOKBACK_MS=8000
 ```
 
 In hybrid mode, Vosk only has to catch the wake word. The actual question is transcribed from the recent audio buffer with OpenAI, which is usually much better in a crowd. For fully local recognition, set `VOICE_STT_MODE=local`.
+
+When Vosk detects the wake word, it tells the local companion service so the overlay can show its awake light.

@@ -233,11 +233,17 @@ class PromptResponse(BaseModel):
     status: str = "ok"
 
 
+class VoiceStatusRequest(BaseModel):
+    status: str = Field(default="awake")
+    duration_ms: int = Field(default=4500)
+
+
 class CompanionState:
     def __init__(self) -> None:
         self.memory: deque[dict[str, Any]] = deque(maxlen=int(os.getenv("MEMORY_LIMIT", DEFAULT_MEMORY_LIMIT)))
         self.pending_action: dict[str, Any] | None = None
         self.pending_screen_description = ""
+        self.voice_awake_until = 0.0
         self.screen_buffer = ScreenContextBuffer(
             int(os.getenv("SCREEN_AGENT_BUFFER_SIZE", DEFAULT_SCREEN_BUFFER_SIZE))
         )
@@ -293,6 +299,13 @@ class CompanionState:
     def forget_last(self) -> None:
         if self.memory:
             self.memory.pop()
+
+    def mark_voice_awake(self, duration_ms: int) -> None:
+        bounded_ms = max(500, min(int(duration_ms), 15000))
+        self.voice_awake_until = time.time() + (bounded_ms / 1000)
+
+    def is_voice_awake(self) -> bool:
+        return time.time() < self.voice_awake_until
 
 
 class BrowserActionRunner:
@@ -372,7 +385,15 @@ def health() -> dict[str, Any]:
         "screenshots": state.screen_buffer.count(),
         "screen_error": state.screen_buffer.last_error,
         "pending_action": state.pending_action is not None,
+        "voice_awake": state.is_voice_awake(),
     }
+
+
+@app.post("/voice-status")
+def voice_status(request: VoiceStatusRequest) -> dict[str, Any]:
+    if request.status in {"awake", "listening"}:
+        state.mark_voice_awake(request.duration_ms)
+    return {"status": "ok", "voice_awake": state.is_voice_awake()}
 
 
 @app.post("/prompt", response_model=PromptResponse)
