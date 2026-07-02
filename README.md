@@ -66,6 +66,7 @@ scripts/install-mac-app.sh
 ```
 
 This creates `/Applications/Grandson.app`. Open it from Finder or drag it to the Dock. It starts Grandson with voice enabled and writes logs to `~/Library/Logs/Grandson/companion.log`.
+The app icon uses `assets/Grandson.icns`; rerun the installer after changing that icon.
 
 The service listens on `http://127.0.0.1:8765`. The overlay and voice listener both send prompts there. Screenshots are kept in memory and the newest screenshot is resized before being sent to OpenAI only when a prompt is received.
 

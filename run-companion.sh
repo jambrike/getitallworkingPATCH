@@ -16,18 +16,29 @@ if [[ -z "${OPENAI_API_KEY:-}" ]]; then
   exit 2
 fi
 
+PIDS=()
+
 cleanup() {
-  jobs -p | xargs -r kill 2>/dev/null || true
+  for pid in "${PIDS[@]:-}"; do
+    if kill -0 "$pid" 2>/dev/null; then
+      pkill -TERM -P "$pid" 2>/dev/null || true
+      kill "$pid" 2>/dev/null || true
+    fi
+  done
 }
 trap cleanup EXIT INT TERM
 
 python3 -m uvicorn agent.companion_service:app \
   --host "${COMPANION_HOST:-127.0.0.1}" \
   --port "${COMPANION_PORT:-8765}" &
+SERVICE_PID=$!
+PIDS+=("$SERVICE_PID")
 
 sleep 2
 
 (cd "$ROOT_DIR/overlay + TTS" && npm start) &
+OVERLAY_PID=$!
+PIDS+=("$OVERLAY_PID")
 
 if [[ "${START_VOICE:-0}" == "1" ]]; then
   (
@@ -41,6 +52,8 @@ if [[ "${START_VOICE:-0}" == "1" ]]; then
     fi
     npm start
   ) &
+  VOICE_PID=$!
+  PIDS+=("$VOICE_PID")
 fi
 
-wait
+wait "$OVERLAY_PID"
