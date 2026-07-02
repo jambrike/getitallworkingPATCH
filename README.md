@@ -3,7 +3,7 @@
 This workspace now runs the five prototypes as one background companion:
 
 - `overlay + TTS` collects typed prompts and speaks replies with OpenAI TTS.
-- `voice` keeps Vosk wake-word speech recognition local.
+- `voice` uses local Vosk for wake detection, then OpenAI transcription to clean up the actual prompt.
 - `screenshot` keeps a small in-memory screen buffer and describes it with OpenAI vision.
 - `agent` runs the local FastAPI companion service and decision layer.
 - `features/laptop-agent-mvp` provides safe browser/file actions.
@@ -66,6 +66,8 @@ grandson what am I looking at
 ```
 
 Saying only `grandson` no longer opens a free-listening mode. This prevents random room audio or the assistant's own speech from becoming the next prompt.
+
+Voice defaults to `VOICE_STT_MODE=hybrid`: Vosk listens cheaply for the wake word, then the last few seconds of microphone audio are transcribed with OpenAI for better accuracy in noisy rooms. Set `VOICE_STT_MODE=local` if you want Vosk-only recognition.
 
 ## Safety
 
