@@ -1,13 +1,12 @@
 {
   "name": "silia",
   "version": "1.0.0",
-  "description": "Voice assistant prototype using Vosk, OpenRouter, and Google Text-to-Speech.",
+  "description": "Voice assistant prototype using Vosk and the local companion service.",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
   },
   "dependencies": {
-    "axios": "^1.7.0",
     "mic": "^2.1.2",
     "vosk": "^0.3.39"
   }

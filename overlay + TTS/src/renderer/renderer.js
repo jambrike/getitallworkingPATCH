@@ -3,6 +3,8 @@ const closeButton = document.querySelector('#closeButton');
 const minimizeButton = document.querySelector('#minimizeButton');
 const expandButton = document.querySelector('#expandButton');
 const shell = document.querySelector('.overlay-shell');
+const statusDot = document.querySelector('#statusDot');
+const statusText = document.querySelector('#statusText');
 
 const NOTE_STORAGE_KEY = 'helper-overlay-note';
 
@@ -37,3 +39,21 @@ expandButton.addEventListener('click', () => {
   window.overlayControls.expand();
   helperText.focus();
 });
+
+window.overlayControls.onStatus((status) => {
+  setStatus(status);
+});
+
+function setStatus(status) {
+  const labels = {
+    listening: 'Listening',
+    thinking: 'Thinking',
+    speaking: 'Speaking',
+    error: 'Error'
+  };
+
+  const normalizedStatus = labels[status] ? status : 'listening';
+  statusText.textContent = labels[normalizedStatus];
+  statusDot.title = labels[normalizedStatus];
+  shell.dataset.status = normalizedStatus;
+}

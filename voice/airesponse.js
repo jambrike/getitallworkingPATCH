@@ -1,88 +1,93 @@
-const axios = require('axios');
+const fs = require('fs');
 const path = require('path');
 const { spawn } = require('child_process');
 
-const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
-const OPENROUTER_API_URL = 'https://openrouter.ai/api/v1/chat/completions';
-const OPENROUTER_MODELS = [
-    'openrouter/free',
-    'google/gemma-4-26b-a4b-it:free',
-    'meta-llama/llama-3.3-70b-instruct:free',
-    'qwen/qwen3-next-80b-a3b-instruct:free'
-];
-const TTS_SCRIPT = path.join(__dirname, 'gttslistners.py');
+const DEFAULT_COMPANION_URL = 'http://127.0.0.1:8765';
+const ROOT_ENV = path.join(__dirname, '..', '.env');
+const OVERLAY_ROOT = path.join(__dirname, '..', 'overlay + TTS');
+const TTS_CLI = path.join(OVERLAY_ROOT, 'src', 'cli', 'say.js');
+
+loadEnvFile(ROOT_ENV);
 
 async function sendToAI(text) {
-    if (!OPENROUTER_API_KEY) {
-        console.error("AI error: set OPENROUTER_API_KEY before running Silia.");
-        return;
+  const prompt = String(text || '').trim();
+  if (!prompt) return '';
+
+  try {
+    const response = await fetch(`${companionUrl()}/prompt`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ source: 'voice', text: prompt })
+    });
+
+    if (!response.ok) {
+      throw new Error(`Companion service returned HTTP ${response.status}.`);
     }
 
-    const prompt = `Respond simply and concisely to this: "${text}"
-    dont respond more than 4-6 sentences.
-    Known information: You are a background assistant for older people to understand whats going on on there laptop. you are in production and you will soon get the ability to know whats going on on there screen. You care begin run on a macbook.`;
+    const payload = await response.json();
+    const say = String(payload.say || '').trim();
+    console.log('[Companion Reply]:', say || '(nothing to say)');
 
-    for (const model of OPENROUTER_MODELS) {
-        try {
-            console.log(`[AI] Trying model: ${model}`);
-            const response = await axios.post(
-                OPENROUTER_API_URL,
-                {
-                    model,
-                    messages: [{ role: "user", content: prompt }],
-                },
-                {
-                    headers: {
-                        "Authorization": `Bearer ${OPENROUTER_API_KEY}`,
-                        "Content-Type": "application/json"
-                    }
-                }
-            );
-
-            const aiText = response.data.choices[0].message.content.trim();
-            console.log("[AI Reply]:", aiText);
-            speakWithGoogleTTS(aiText);
-
-            return aiText;
-        } catch (err) {
-            logAIError(model, err);
-        }
+    if (say) {
+      speakWithOpenAITTS(say);
     }
 
-    console.error("AI error: all OpenRouter models failed.");
+    return say;
+  } catch (error) {
+    console.error('Companion error:', error.message || error);
+    return '';
+  }
 }
 
-function logAIError(model, err) {
-    if (err.response) {
-        console.error(`[AI] ${model} failed:`, err.response.status, err.response.data);
-        return;
-    }
-
-    console.error(`[AI] ${model} failed:`, err.message);
+function companionUrl() {
+  return (process.env.COMPANION_URL || DEFAULT_COMPANION_URL).replace(/\/$/, '');
 }
 
-function speakWithGoogleTTS(text) {
-    if (!text) return;
+function speakWithOpenAITTS(text) {
+  const child = spawn('node', [TTS_CLI, text], {
+    cwd: OVERLAY_ROOT,
+    env: process.env,
+    stdio: ['ignore', 'pipe', 'pipe']
+  });
 
-    const pythonProcess = spawn('python3', [TTS_SCRIPT, text]);
+  child.stdout.on('data', (data) => {
+    console.log(`[TTS] ${data}`);
+  });
 
-    pythonProcess.stdout.on('data', (data) => {
-        console.log(`[TTS] ${data}`);
-    });
+  child.stderr.on('data', (data) => {
+    console.error(`[TTS ERR] ${data}`);
+  });
 
-    pythonProcess.stderr.on('data', (data) => {
-        console.error(`[TTS ERR] ${data}`);
-    });
+  child.on('error', (err) => {
+    console.error('Failed to start OpenAI TTS:', err.message);
+  });
 
-    pythonProcess.on('error', (err) => {
-        console.error("Failed to start Google TTS:", err.message);
-    });
-
-    pythonProcess.on('close', (code) => {
-        if (code !== 0) {
-            console.error(`Google TTS exited with code ${code}`);
-        }
-    });
+  child.on('close', (code) => {
+    if (code !== 0) {
+      console.error(`OpenAI TTS exited with code ${code}`);
+    }
+  });
 }
 
 module.exports = { sendToAI };
+
+function loadEnvFile(filePath) {
+  if (!fs.existsSync(filePath)) return;
+
+  const contents = fs.readFileSync(filePath, 'utf8');
+  for (const line of contents.split(/\r?\n/)) {
+    const trimmedLine = line.trim();
+    if (!trimmedLine || trimmedLine.startsWith('#')) continue;
+
+    const separatorIndex = trimmedLine.indexOf('=');
+    if (separatorIndex === -1) continue;
+
+    const key = trimmedLine.slice(0, separatorIndex).trim();
+    const value = trimmedLine.slice(separatorIndex + 1).trim().replace(/^["']|["']$/g, '');
+    if (key && process.env[key] === undefined) {
+      process.env[key] = value;
+    }
+  }
+}

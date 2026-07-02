@@ -90,26 +90,26 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--model",
-        default=os.environ.get("GEMINI_MODEL", DEFAULT_MODEL),
-        help="Vision-capable Gemini model to use. Also configurable with GEMINI_MODEL.",
+        default=os.environ.get("VISION_MODEL", DEFAULT_MODEL),
+        help="Vision-capable OpenAI model to use. Also configurable with VISION_MODEL.",
     )
     parser.add_argument(
         "--max-tokens",
         type=int,
-        default=int(os.environ.get("GEMINI_MAX_TOKENS", DEFAULT_MAX_TOKENS)),
-        help="Maximum response tokens to request. Also configurable with GEMINI_MAX_TOKENS.",
+        default=int(os.environ.get("VISION_MAX_TOKENS", DEFAULT_MAX_TOKENS)),
+        help="Maximum response tokens to request. Also configurable with VISION_MAX_TOKENS.",
     )
     return parser.parse_args()
 
 
 def validate_args(args: argparse.Namespace) -> tuple[str, str] | None:
-    api_key = os.environ.get("GEMINI_API_KEY")
+    api_key = os.environ.get("OPENAI_API_KEY")
     if not api_key:
         return None
 
     if not args.model:
         print(
-            "Missing Gemini model. Pass --model or set GEMINI_MODEL to a "
+            "Missing vision model. Pass --model or set VISION_MODEL to a "
             "vision-capable model slug.",
             file=sys.stderr,
         )
@@ -140,7 +140,7 @@ def main() -> int:
     args = parse_args()
     credentials = validate_args(args)
     if credentials is None:
-        print("Missing GEMINI_API_KEY. Set it before running this script.", file=sys.stderr)
+        print("Missing OPENAI_API_KEY. Set it before running this script.", file=sys.stderr)
         return 2
 
     api_key, model = credentials

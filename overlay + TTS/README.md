@@ -2,7 +2,17 @@
 
 A tiny Electron overlay app that floats above other apps on macOS. It shows a small mascot and a simple text box for reminders, notes, or helper prompts.
 
-## Run
+## Run With The Companion Service
+
+From the workspace root, copy `.env.example` to `.env`, set `OPENAI_API_KEY`, install dependencies, then run:
+
+```bash
+./run-companion.sh
+```
+
+The overlay sends typed prompts to `http://127.0.0.1:8765/prompt`, speaks only the assistant's returned `say` text, and shows listening/thinking/speaking/error status.
+
+## Run Overlay Only
 
 ```bash
 npm install
@@ -66,7 +76,7 @@ Reusable functions are exported from `src/tts`:
 const { speak, streamSpeechToFile, preprocessText, playAudioFile } = require('./src/tts');
 ```
 
-The Electron overlay now calls `speak(text)` from the main process when text is submitted with Enter. The renderer still does not call OpenAI directly.
+The Electron overlay now calls the local companion service from the main process when text is submitted with Enter. The renderer still does not call OpenAI directly.
 
 ## macOS Notes
 

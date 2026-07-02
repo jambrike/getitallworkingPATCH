@@ -83,6 +83,21 @@ textarea {
   box-shadow: 0 0 0 4px rgba(49, 201, 107, 0.16);
 }
 
+.overlay-shell[data-status="thinking"] .status-dot {
+  background: #f0a429;
+  box-shadow: 0 0 0 4px rgba(240, 164, 41, 0.18);
+}
+
+.overlay-shell[data-status="speaking"] .status-dot {
+  background: #4797ff;
+  box-shadow: 0 0 0 4px rgba(71, 151, 255, 0.16);
+}
+
+.overlay-shell[data-status="error"] .status-dot {
+  background: #e55353;
+  box-shadow: 0 0 0 4px rgba(229, 83, 83, 0.16);
+}
+
 .mascot {
   position: relative;
   width: 76px;
@@ -185,6 +200,14 @@ textarea {
   height: 6px;
   border-radius: 999px;
   background: rgba(80, 100, 118, 0.22);
+}
+
+.status-text {
+  min-width: 64px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1;
 }
 
 .window-actions {

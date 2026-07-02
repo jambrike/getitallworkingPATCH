@@ -1,36 +1,5 @@
-Approach: screen capture plus elderly-friendly guidance
+The screen helper captures the visible screen as a PNG, keeps only a small recent buffer in memory, and sends screenshots to OpenAI vision only when the user asks for help.
 
-The workflow uses a simple pipeline:
+The model is prompted to explain the screen in plain, respectful language for an older adult. It should mention only visible details, avoid repeating sensitive information, and give one safe next step when useful.
 
-1. Capture the current screen as an image.
-2. Attach that image to a text question.
-3. Send both to Gemini using a vision-capable model.
-4. Print a calm explanation of what is visible, what it probably means, and what the user can safely do next.
-
-The script uses Pillow's ImageGrab module for the screenshot. This keeps the capture step local and small, without requiring a full browser automation or desktop-control framework.
-
-The script then converts the PNG screenshot into inline base64 data. That lets the image be sent directly in the Gemini Interactions API request without first uploading it somewhere else.
-
-The model prompt is designed for older adults. It asks the model to use respectful plain language, short sentences, and a brief conversational style. The answer should feel like a patient helper sitting beside the person, not like a form or report.
-
-The prompt now assumes that even common technology terms may be unfamiliar. When the model mentions something like Google, a homepage, an icon, or AI mode, it should add a simple purpose in everyday language. The goal is to be clearer without becoming long-winded.
-
-The prompt also supports task guidance. If the user asks how to do something, the model should guide them from the current screen instead of giving a generic tutorial. It should give only the next one to three steps and invite the user to ask again after completing the next step. This keeps the guidance manageable for someone who may feel unsure.
-
-The prompt also supports clarification questions. If the user asks "is it this icon?" or "should I press this?", the model should answer directly when it is confident, for example "Yes, that looks like the Messages icon." If the pointer or selected item is not clear, it should admit uncertainty and ask the user to move the pointer over the item, make the window larger, or describe the icon. This reduces the risk of confidently guiding the user to click the wrong thing.
-
-The prompt also tells the model to ignore the terminal window that is running the helper. This helps prevent the assistant from describing its own command prompt, typed question, or previous answer when the terminal is visible on screen. The instruction is repeated in each request so the model is less likely to drift. The terminal is still part of the screenshot; the current prototype filters it by instruction rather than removing it from the image.
-
-The prompt also includes safety rules. Screens can contain password boxes, payment forms, fake virus warnings, account recovery pages, and other risky situations. The model is told to be cautious, avoid encouraging sensitive actions unless the flow is clearly trusted, and recommend asking someone trusted when money, identity, or account security is involved. For banking and payment tasks, it should give high-level navigation help only and remind the user to use official websites or apps.
-
-The script is designed as a command-line tool because the target interaction is simple: someone types "what is happening?" and gets text back. Other software can later call the same script and read its standard output.
-
-The model name is configurable with GEMINI_MODEL or the --model flag. The script defaults to a vision-capable Gemini model, but the model remains configurable because available models and pricing can change.
-
-The script also sets a modest max output token value for the response. This is large enough for a short guided answer but still keeps the output focused.
-
-The background context prototype adds a small local watcher. While it runs, it captures screenshots every few seconds and keeps only the latest few screenshots in memory. When the user asks a question, those recent screenshots are sent from oldest to newest so the model can use the newest view as the main screen and earlier views only to understand what changed.
-
-This background design is useful for questions like "what changed?" or "why is this not working?", but it is also more sensitive because it watches the screen continuously while running. The prototype keeps the buffer in memory and does not save screenshots by default, but a production version should add stronger visible controls before this behavior is enabled by default.
-
-By default, the screenshot is not saved. This is intentional because screens often contain private information. When debugging is needed, the --save flag stores the image under screenshots so it is easy to inspect what the model saw. The docs folder is kept for human-readable documentation only, so the runnable script and generated screenshots live outside it.
+The model name is configurable with VISION_MODEL. The default is gpt-5.4-nano for cost control; use gpt-5.4-mini if screen understanding needs to be stronger.

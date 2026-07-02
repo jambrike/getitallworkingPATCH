@@ -1,6 +1,6 @@
 # laptop-agent-mvp
 
-A small local AI-powered browser agent MVP. It asks for a task in the terminal, opens a visible Chromium browser with Playwright, lets an OpenAI model choose one browser action at a time, reads page text, saves useful results to `outputs/`, and asks before risky actions.
+A small local AI-powered browser agent MVP. In the integrated companion app, this repo provides the browser/file action executor behind `agent/companion_service.py`.
 
 This is browser-only. It does not control your desktop outside Playwright.
 
@@ -25,12 +25,11 @@ cp .env.example .env
 Then edit `.env`:
 
 ```env
-OPENROUTER_API_KEY=your_openrouter_api_key_here
-OPENAI_BASE_URL=https://openrouter.ai/api/v1
-OPENAI_MODEL=openrouter/auto
+OPENAI_API_KEY=your_openai_api_key_here
+OPENAI_MODEL=gpt-5.4-nano
 ```
 
-OpenRouter uses OpenAI-compatible APIs, so this project still uses the OpenAI Python SDK. You can replace `openrouter/auto` with another OpenRouter model slug, for example `anthropic/claude-3.5-sonnet`, `openai/gpt-4o-mini`, or any model available in your OpenRouter account.
+The root `.env.example` is the preferred shared setup for the full five-repo companion app.
 
 ## Run
 

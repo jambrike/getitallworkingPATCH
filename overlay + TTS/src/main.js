@@ -2,7 +2,9 @@ const electron = require('electron');
 const path = require('path');
 const { loadEnvFile } = require('./config/loadEnv');
 const { speak, preprocessText } = require('./tts');
+const { sendPrompt } = require('./companion/client');
 
+loadEnvFile(path.join(__dirname, '..', '..', '.env'));
 loadEnvFile();
 
 if (!electron.app) {
@@ -99,10 +101,27 @@ ipcMain.on('overlay:input', async (_event, value) => {
   }
 
   console.log(`[overlay input] ${text}`);
+  sendOverlayStatus('thinking');
 
   try {
-    await speak(text);
+    const response = await sendPrompt(text, 'overlay');
+    const say = preprocessText(response.say || '');
+
+    if (!say) {
+      sendOverlayStatus('listening');
+      return;
+    }
+
+    sendOverlayStatus('speaking');
+    await speak(say);
+    sendOverlayStatus('listening');
   } catch (error) {
-    console.error(`[overlay tts] ${error.message || 'Text-to-speech failed.'}`);
+    sendOverlayStatus('error');
+    console.error(`[overlay companion] ${error.message || 'Companion request failed.'}`);
   }
 });
+
+function sendOverlayStatus(status) {
+  if (!overlayWindow) return;
+  overlayWindow.webContents.send('overlay:status', status);
+}

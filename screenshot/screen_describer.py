@@ -1,17 +1,17 @@
 #!/usr/bin/env python3
 """
-Capture the current screen and ask Gemini to describe it.
+Capture the current screen and ask OpenAI to describe it.
 
 Usage:
     python screen_describer.py "what is happening?"
 
 Required:
     pip install pillow
-    export GEMINI_API_KEY="..."
+    export OPENAI_API_KEY="..."
 
 Optional:
-    export GEMINI_MODEL="gemini-3.1-flash-lite"
-    export GEMINI_MAX_TOKENS="700"
+    export VISION_MODEL="gpt-5.4-nano"
+    export VISION_MAX_TOKENS="700"
 """
 
 from __future__ import annotations
@@ -19,13 +19,10 @@ from __future__ import annotations
 import argparse
 import base64
 import io
-import json
 import os
 import sys
 from datetime import datetime
 from pathlib import Path
-from urllib.error import HTTPError, URLError
-from urllib.request import Request, urlopen
 
 try:
     from PIL import ImageGrab
@@ -38,8 +35,7 @@ except ModuleNotFoundError as exc:
 
 DEFAULT_PROMPT = "What is happening on the screen?"
 DEFAULT_MAX_TOKENS = 700
-DEFAULT_MODEL = "gemini-3.1-flash-lite"
-GEMINI_API_URL = "https://generativelanguage.googleapis.com/v1beta/interactions"
+DEFAULT_MODEL = "gpt-5.4-nano"
 SCREEN_DESCRIPTION_SYSTEM_PROMPT = """
 You help older adults understand what is happening on their computer screen.
 You can also guide them through simple computer tasks, one careful step at a
@@ -157,13 +153,6 @@ def save_screenshot(image_bytes: bytes, output_dir: Path) -> Path:
     return output_path
 
 
-def build_gemini_headers(api_key: str) -> dict[str, str]:
-    return {
-        "x-goog-api-key": api_key,
-        "Content-Type": "application/json",
-    }
-
-
 def extract_message_text(response_body: dict) -> str:
     output_text = response_body.get("output_text")
     if isinstance(output_text, str) and output_text.strip():
@@ -186,7 +175,7 @@ def extract_message_text(response_body: dict) -> str:
     if text_parts:
         return "\n".join(part.strip() for part in text_parts if part.strip())
 
-    raise RuntimeError(f"Unexpected Gemini response: {response_body}")
+    raise RuntimeError(f"Unexpected OpenAI response: {response_body}")
 
 
 def describe_screen(
@@ -209,9 +198,16 @@ def describe_screen_context(
     if not image_sequence:
         raise ValueError("At least one screenshot is required.")
 
-    gemini_input = [
+    try:
+        from openai import OpenAI
+    except ImportError as exc:
+        raise RuntimeError(
+            "Missing dependency: install the OpenAI Python SDK with `pip install openai`."
+        ) from exc
+
+    user_content = [
         {
-            "type": "text",
+            "type": "input_text",
             "text": (
                 f"{question}\n\n"
                 "Important: ignore the terminal window running this helper. "
@@ -227,40 +223,34 @@ def describe_screen_context(
     ]
 
     for image_bytes in image_sequence:
-        gemini_input.append(
+        user_content.append(
             {
-                "type": "image",
-                "data": image_bytes_to_base64(image_bytes),
-                "mime_type": "image/png",
+                "type": "input_image",
+                "image_url": f"data:image/png;base64,{image_bytes_to_base64(image_bytes)}",
             }
         )
 
-    payload = {
-        "model": model,
-        "system_instruction": SCREEN_DESCRIPTION_SYSTEM_PROMPT,
-        "input": gemini_input,
-        "generation_config": {
-            "max_output_tokens": max_tokens,
-            "thinking_level": "low",
-        },
-    }
+    try:
+        client = OpenAI(api_key=api_key)
+        response = client.responses.create(
+            model=model,
+            input=[
+                {"role": "system", "content": SCREEN_DESCRIPTION_SYSTEM_PROMPT},
+                {"role": "user", "content": user_content},
+            ],
+            max_output_tokens=max_tokens,
+        )
+    except Exception as exc:
+        raise RuntimeError(f"OpenAI vision request failed: {exc}") from exc
 
-    request = Request(
-        GEMINI_API_URL,
-        data=json.dumps(payload).encode("utf-8"),
-        headers=build_gemini_headers(api_key),
-        method="POST",
-    )
+    output_text = getattr(response, "output_text", None)
+    if output_text and output_text.strip():
+        return output_text.strip()
 
     try:
-        with urlopen(request, timeout=60) as response:
-            response_body = json.loads(response.read().decode("utf-8"))
-    except HTTPError as exc:
-        error_body = exc.read().decode("utf-8", errors="replace")
-        raise RuntimeError(f"Gemini request failed with HTTP {exc.code}: {error_body}") from exc
-    except URLError as exc:
-        raise RuntimeError(f"Could not reach Gemini: {exc.reason}") from exc
-
+        response_body = response.model_dump()
+    except AttributeError:
+        response_body = {}
     return extract_message_text(response_body)
 
 
@@ -276,14 +266,14 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument(
         "--model",
-        default=os.environ.get("GEMINI_MODEL", DEFAULT_MODEL),
-        help="Vision-capable Gemini model to use. Also configurable with GEMINI_MODEL.",
+        default=os.environ.get("VISION_MODEL", DEFAULT_MODEL),
+        help="Vision-capable OpenAI model to use. Also configurable with VISION_MODEL.",
     )
     parser.add_argument(
         "--max-tokens",
         type=int,
-        default=int(os.environ.get("GEMINI_MAX_TOKENS", DEFAULT_MAX_TOKENS)),
-        help="Maximum response tokens to request. Also configurable with GEMINI_MAX_TOKENS.",
+        default=int(os.environ.get("VISION_MAX_TOKENS", DEFAULT_MAX_TOKENS)),
+        help="Maximum response tokens to request. Also configurable with VISION_MAX_TOKENS.",
     )
     parser.add_argument(
         "--save",
@@ -301,9 +291,9 @@ def parse_args() -> argparse.Namespace:
 def main() -> int:
     args = parse_args()
 
-    api_key = os.environ.get("GEMINI_API_KEY")
+    api_key = os.environ.get("OPENAI_API_KEY")
     if not api_key:
-        print("Missing GEMINI_API_KEY. Set it before running this script.", file=sys.stderr)
+        print("Missing OPENAI_API_KEY. Set it before running this script.", file=sys.stderr)
         return 2
 
     if args.max_tokens < 1:

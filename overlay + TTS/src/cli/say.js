@@ -1,9 +1,11 @@
 #!/usr/bin/env node
 
 const readline = require('readline');
+const path = require('path');
 const { loadEnvFile } = require('../config/loadEnv');
 const { speak, preprocessText } = require('../tts');
 
+loadEnvFile(path.join(__dirname, '..', '..', '..', '.env'));
 loadEnvFile();
 
 function readInteractiveInput() {
