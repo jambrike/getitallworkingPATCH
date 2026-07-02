@@ -11,9 +11,9 @@
   --mint: #75d6b6;
   --coral: #ff8f7c;
   --lemon: #ffd766;
-  --button-blue: #d8ecff;
-  --button-blue-hover: #c8e4fb;
-  --button-blue-line: rgba(80, 134, 176, 0.3);
+  --button-blue: #dff9fb;
+  --button-blue-hover: #c8f1f5;
+  --button-blue-line: rgba(70, 170, 184, 0.26);
   --shadow: rgba(35, 49, 63, 0.18);
 }
 
@@ -329,7 +329,7 @@ textarea {
   border: 1px solid var(--button-blue-line);
   border-radius: 14px;
   cursor: pointer;
-  color: #21384d;
+  color: #21474e;
   background: var(--button-blue);
   font-family:
     Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
