@@ -57,6 +57,16 @@ Start voice input too:
 START_VOICE=1 ./run-companion.sh
 ```
 
+## Mac App Launcher
+
+Install a clickable macOS app wrapper:
+
+```bash
+scripts/install-mac-app.sh
+```
+
+This creates `/Applications/Grandson.app`. Open it from Finder or drag it to the Dock. It starts Grandson with voice enabled and writes logs to `~/Library/Logs/Grandson/companion.log`.
+
 The service listens on `http://127.0.0.1:8765`. The overlay and voice listener both send prompts there. Screenshots are kept in memory and the newest screenshot is resized before being sent to OpenAI only when a prompt is received.
 
 Click `Speak` in the overlay to record a short voice prompt directly. The overlay lights up while it is awake/listening, transcribes the clip with OpenAI, then sends the prompt to the same companion service.
