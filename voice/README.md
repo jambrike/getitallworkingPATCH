@@ -32,4 +32,4 @@ Run Silia separately, or start it with the root launcher by setting `START_VOICE
 node index.js
 ```
 
-Say `click`, then ask your question. You can also say the question in one go, like `click what is two plus two`.
+Say `grandson`, then ask your question. You can also say the question in one go, like `grandson what is two plus two`.

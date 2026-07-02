@@ -8,6 +8,15 @@ const DEFAULT_COMPANION_URL = 'http://127.0.0.1:8765';
 const ROOT_ENV = path.join(__dirname, '..', '.env');
 const OVERLAY_ROOT = path.join(__dirname, '..', 'overlay + TTS');
 const TTS_CLI = path.join(OVERLAY_ROOT, 'src', 'cli', 'say.js');
+const DEFAULT_TTS_NODE = path.join(
+  process.env.HOME || '',
+  '.nvm',
+  'versions',
+  'node',
+  'v20.20.0',
+  'bin',
+  'node'
+);
 
 loadEnvFile(ROOT_ENV);
 
@@ -36,7 +45,7 @@ function companionUrl() {
 }
 
 function speakWithOpenAITTS(text) {
-  const child = spawn('node', [TTS_CLI, text], {
+  const child = spawn(ttsNodeCommand(), [TTS_CLI, text], {
     cwd: OVERLAY_ROOT,
     env: process.env,
     stdio: ['ignore', 'pipe', 'pipe']
@@ -62,6 +71,18 @@ function speakWithOpenAITTS(text) {
 }
 
 module.exports = { sendToAI };
+
+function ttsNodeCommand() {
+  if (process.env.OPENAI_TTS_NODE) {
+    return process.env.OPENAI_TTS_NODE;
+  }
+
+  if (fs.existsSync(DEFAULT_TTS_NODE)) {
+    return DEFAULT_TTS_NODE;
+  }
+
+  return 'node';
+}
 
 function postJson(url, payload) {
   const parsedUrl = new URL(url);
