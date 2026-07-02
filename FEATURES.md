@@ -17,6 +17,7 @@
 - Browser/file actions through Playwright:
   - search the web
   - open a URL
+  - open common sites like YouTube directly from commands such as "open YouTube"
   - read visible page text
   - click visible text
   - type into a selector

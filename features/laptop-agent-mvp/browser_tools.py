@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
-from urllib.parse import quote_plus
+from urllib.parse import quote_plus, urlparse
 
 from playwright.sync_api import Page, TimeoutError as PlaywrightTimeoutError, sync_playwright
 
@@ -37,7 +37,7 @@ class BrowserSession:
 
     def open_url(self, url: str) -> str:
         page = self.require_page()
-        page.goto(url, wait_until="domcontentloaded", timeout=30_000)
+        page.goto(normalize_url(url), wait_until="domcontentloaded", timeout=30_000)
         return f"Opened {page.url}"
 
     def search_web(self, query: str) -> str:
@@ -79,3 +79,15 @@ def save_output_file(outputs_dir: Path, filename: str | None, content: str) -> P
     path = safe_output_path(outputs_dir, filename)
     path.write_text(content, encoding="utf-8")
     return path
+
+
+def normalize_url(url: str) -> str:
+    cleaned = str(url or "").strip()
+    if not cleaned:
+        raise ValueError("URL cannot be empty.")
+
+    parsed = urlparse(cleaned)
+    if not parsed.scheme:
+        cleaned = f"https://{cleaned}"
+
+    return cleaned

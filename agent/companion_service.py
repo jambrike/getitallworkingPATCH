@@ -8,6 +8,7 @@ import threading
 import time
 import base64
 import io
+import re
 from collections import deque
 from pathlib import Path
 from typing import Any
@@ -56,6 +57,14 @@ CONTROL_COMMANDS = {
     "reset context": "reset",
     "forget that": "forget",
     "cancel": "cancel",
+}
+KNOWN_SITES = {
+    "youtube": "https://www.youtube.com",
+    "you tube": "https://www.youtube.com",
+    "google": "https://www.google.com",
+    "gmail": "https://mail.google.com",
+    "github": "https://github.com",
+    "spotify": "https://open.spotify.com",
 }
 DECISION_SCHEMA: dict[str, Any] = {
     "name": "companion_decision",
@@ -117,6 +126,7 @@ Priorities:
 6. Never repeat private details from the screen. Refer to them generally.
 7. Use only the actions listed in the input.
 8. Prefer a single useful next action. Do not create long speculative plans.
+9. If the user asks to open a known website, use open_url with a full https URL.
 
 Return JSON only.
 
@@ -324,6 +334,10 @@ def handle_prompt(request: PromptRequest) -> PromptResponse:
         if state.pending_action and is_approval(text):
             return execute_pending_action(text)
 
+        direct_decision = direct_site_open_decision(text)
+        if direct_decision is not None:
+            return execute_decision(request.source, text, direct_decision)
+
         try:
             decision = choose_decision(text)
         except Exception as exc:
@@ -331,25 +345,7 @@ def handle_prompt(request: PromptRequest) -> PromptResponse:
             state.remember(f"Request failed: {text}", request.source, "error", str(exc))
             return PromptResponse(say=say, run_in_background=False, actions=[], status="error")
 
-        actions = decision.get("actions", [])
-        run_in_background = bool(decision.get("run_in_background"))
-        say = str(decision.get("say") or "")
-        status = "ok"
-        memory_note = str(decision.get("memory_note") or "")
-
-        action_result = ""
-        if run_in_background and actions:
-            action = actions[0]
-            if should_require_approval(action):
-                state.pending_action = action
-                say = say or "That could affect something important. Please say yes if you want me to continue."
-                status = "approval_required"
-            else:
-                action_result = execute_action(action)
-                status = "acted"
-
-        state.remember(memory_note or f"User asked: {text}", request.source, status, action_result)
-        return PromptResponse(say=say, run_in_background=run_in_background, actions=actions[:1], status=status)
+        return execute_decision(request.source, text, decision)
 
 
 def execute_pending_action(approval_text: str) -> PromptResponse:
@@ -369,6 +365,28 @@ def execute_pending_action(approval_text: str) -> PromptResponse:
 
     state.remember(f"Approved action: {action.get('action')}", "approval", status, result)
     return PromptResponse(say=say, run_in_background=True, actions=[action], status=status)
+
+
+def execute_decision(source: str, text: str, decision: dict[str, Any]) -> PromptResponse:
+    actions = decision.get("actions", [])
+    run_in_background = bool(decision.get("run_in_background"))
+    say = str(decision.get("say") or "")
+    status = str(decision.get("status") or "ok")
+    memory_note = str(decision.get("memory_note") or "")
+
+    action_result = ""
+    if run_in_background and actions:
+        action = actions[0]
+        if should_require_approval(action):
+            state.pending_action = action
+            say = say or "That could affect something important. Please say yes if you want me to continue."
+            status = "approval_required"
+        else:
+            action_result = execute_action(action)
+            status = "acted"
+
+    state.remember(memory_note or f"User asked: {text}", source, status, action_result)
+    return PromptResponse(say=say, run_in_background=run_in_background, actions=actions[:1], status=status)
 
 
 def choose_decision(user_prompt: str) -> dict[str, Any]:
@@ -420,6 +438,37 @@ def choose_decision(user_prompt: str) -> dict[str, Any]:
     decision = json.loads(response.output_text)
     validate_actions(decision)
     return decision
+
+
+def direct_site_open_decision(text: str) -> dict[str, Any] | None:
+    normalized = " ".join(text.lower().split())
+    if not re.search(r"\b(open|go to|launch|bring up|show me)\b", normalized):
+        return None
+
+    for site_name, url in KNOWN_SITES.items():
+        if re.search(rf"\b{re.escape(site_name)}\b", normalized):
+            return {
+                "say": f"Opening {site_name.title()}.",
+                "run_in_background": True,
+                "actions": [{"action": "open_url", "url": url}],
+                "memory_note": f"User asked to open {site_name}.",
+                "needs_action": True,
+                "status": "ok",
+            }
+
+    domain_match = re.search(r"\b([a-z0-9-]+\.(?:com|org|net|ie|co\.uk))\b", normalized)
+    if domain_match:
+        domain = domain_match.group(1)
+        return {
+            "say": f"Opening {domain}.",
+            "run_in_background": True,
+            "actions": [{"action": "open_url", "url": f"https://{domain}"}],
+            "memory_note": f"User asked to open {domain}.",
+            "needs_action": True,
+            "status": "ok",
+        }
+
+    return None
 
 
 def should_require_approval(action: dict[str, Any]) -> bool:
