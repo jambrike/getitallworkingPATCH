@@ -10,6 +10,9 @@ const statusDot = document.querySelector('#statusDot');
 const statusText = document.querySelector('#statusText');
 
 const NOTE_STORAGE_KEY = 'helper-overlay-note';
+const TYPEWRITER_WORD_DELAY_MS = 55;
+
+let typewriterTimer;
 
 helperText.value = localStorage.getItem(NOTE_STORAGE_KEY) || '';
 
@@ -64,6 +67,7 @@ function sendPrompt() {
   const text = helperText.value.trim();
   if (!text) return;
 
+  showPendingReply();
   window.overlayControls.printInput(text);
   helperText.value = '';
   localStorage.setItem(NOTE_STORAGE_KEY, '');
@@ -71,8 +75,47 @@ function sendPrompt() {
 
 function showReply(text) {
   const cleanedText = String(text || '').trim();
-  assistantReply.textContent = cleanedText;
   shell.classList.toggle('has-reply', Boolean(cleanedText));
+  typeReply(cleanedText);
+}
+
+function showPendingReply() {
+  clearTypewriter();
+  assistantReply.textContent = 'Thinking...';
+  shell.classList.add('is-opening', 'has-reply');
+}
+
+function typeReply(text) {
+  clearTypewriter();
+
+  if (!text) {
+    assistantReply.textContent = '';
+    shell.classList.remove('is-opening');
+    return;
+  }
+
+  const words = text.split(/\s+/).filter(Boolean);
+  const renderedWords = [];
+  assistantReply.textContent = '';
+  shell.classList.remove('is-opening');
+
+  typewriterTimer = window.setInterval(() => {
+    const nextWord = words.shift();
+
+    if (!nextWord) {
+      clearTypewriter();
+      return;
+    }
+
+    renderedWords.push(nextWord);
+    assistantReply.textContent = renderedWords.join(' ');
+  }, TYPEWRITER_WORD_DELAY_MS);
+}
+
+function clearTypewriter() {
+  if (!typewriterTimer) return;
+  window.clearInterval(typewriterTimer);
+  typewriterTimer = undefined;
 }
 
 function setStatus(status) {

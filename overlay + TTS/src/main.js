@@ -101,6 +101,7 @@ ipcMain.on('overlay:input', async (_event, value) => {
   }
 
   console.log(`[overlay input] ${text}`);
+  resizeForThinking();
   sendOverlayStatus('thinking');
 
   try {
@@ -108,6 +109,7 @@ ipcMain.on('overlay:input', async (_event, value) => {
     const say = preprocessText(response.say || '');
 
     if (!say) {
+      sendOverlayReply('');
       sendOverlayStatus('listening');
       return;
     }
@@ -118,6 +120,7 @@ ipcMain.on('overlay:input', async (_event, value) => {
     await speak(say);
     sendOverlayStatus('listening');
   } catch (error) {
+    sendOverlayReply('Something went wrong. Try that again.');
     sendOverlayStatus('error');
     console.error(`[overlay companion] ${error.message || 'Companion request failed.'}`);
   }
@@ -160,4 +163,9 @@ function resizeForReply(text) {
   const textLength = text.length;
   const targetHeight = Math.min(390, Math.max(310, 280 + Math.ceil(textLength / 75) * 24));
   overlayWindow.setSize(420, targetHeight, true);
+}
+
+function resizeForThinking() {
+  if (!overlayWindow) return;
+  overlayWindow.setSize(410, 310, true);
 }
