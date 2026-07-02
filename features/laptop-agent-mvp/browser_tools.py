@@ -3,21 +3,52 @@ from __future__ import annotations
 from pathlib import Path
 from urllib.parse import quote_plus, urlparse
 
-from playwright.sync_api import Page, TimeoutError as PlaywrightTimeoutError, sync_playwright
+from playwright.sync_api import Browser, Page, TimeoutError as PlaywrightTimeoutError, sync_playwright
 
 from safety import safe_output_path
+
+
+BLOCK_BROWSER_PROMPTS_SCRIPT = """
+(() => {
+  if ("Notification" in window) {
+    try {
+      Object.defineProperty(Notification, "permission", { get: () => "denied" });
+      Notification.requestPermission = () => Promise.resolve("denied");
+    } catch (_error) {}
+  }
+
+  if (navigator.permissions && navigator.permissions.query) {
+    const originalQuery = navigator.permissions.query.bind(navigator.permissions);
+    navigator.permissions.query = (parameters) => {
+      if (parameters && parameters.name === "notifications") {
+        return Promise.resolve({ state: "denied", onchange: null });
+      }
+      return originalQuery(parameters);
+    };
+  }
+})();
+"""
 
 
 class BrowserSession:
     def __init__(self) -> None:
         self._playwright = None
-        self.browser = None
+        self.browser: Browser | None = None
         self.page: Page | None = None
 
     def __enter__(self) -> "BrowserSession":
         self._playwright = sync_playwright().start()
-        self.browser = self._playwright.chromium.launch(headless=False)
+        self.browser = self._playwright.chromium.launch(
+            headless=False,
+            args=[
+                "--disable-notifications",
+                "--disable-infobars",
+                "--disable-features=PermissionPromptPersistence,AutomationControlled",
+            ],
+            ignore_default_args=["--enable-automation"],
+        )
         self.page = self.browser.new_page()
+        self._prepare_page(self.page)
         return self
 
     def __exit__(self, exc_type, exc, tb) -> None:
@@ -30,6 +61,10 @@ class BrowserSession:
         if self.page is None:
             raise RuntimeError("Browser page is not available.")
         return self.page
+
+    def _prepare_page(self, page: Page) -> None:
+        page.add_init_script(BLOCK_BROWSER_PROMPTS_SCRIPT)
+        page.on("dialog", lambda dialog: dialog.dismiss())
 
     def current_url(self) -> str:
         page = self.require_page()
