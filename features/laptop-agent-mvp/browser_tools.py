@@ -1,23 +1,54 @@
 from __future__ import annotations
 
 from pathlib import Path
-from urllib.parse import quote_plus
+from urllib.parse import quote_plus, urlparse
 
-from playwright.sync_api import Page, TimeoutError as PlaywrightTimeoutError, sync_playwright
+from playwright.sync_api import Browser, Page, TimeoutError as PlaywrightTimeoutError, sync_playwright
 
 from safety import safe_output_path
+
+
+BLOCK_BROWSER_PROMPTS_SCRIPT = """
+(() => {
+  if ("Notification" in window) {
+    try {
+      Object.defineProperty(Notification, "permission", { get: () => "denied" });
+      Notification.requestPermission = () => Promise.resolve("denied");
+    } catch (_error) {}
+  }
+
+  if (navigator.permissions && navigator.permissions.query) {
+    const originalQuery = navigator.permissions.query.bind(navigator.permissions);
+    navigator.permissions.query = (parameters) => {
+      if (parameters && parameters.name === "notifications") {
+        return Promise.resolve({ state: "denied", onchange: null });
+      }
+      return originalQuery(parameters);
+    };
+  }
+})();
+"""
 
 
 class BrowserSession:
     def __init__(self) -> None:
         self._playwright = None
-        self.browser = None
+        self.browser: Browser | None = None
         self.page: Page | None = None
 
     def __enter__(self) -> "BrowserSession":
         self._playwright = sync_playwright().start()
-        self.browser = self._playwright.chromium.launch(headless=False)
+        self.browser = self._playwright.chromium.launch(
+            headless=False,
+            args=[
+                "--disable-notifications",
+                "--disable-infobars",
+                "--disable-features=PermissionPromptPersistence,AutomationControlled",
+            ],
+            ignore_default_args=["--enable-automation"],
+        )
         self.page = self.browser.new_page()
+        self._prepare_page(self.page)
         return self
 
     def __exit__(self, exc_type, exc, tb) -> None:
@@ -31,13 +62,17 @@ class BrowserSession:
             raise RuntimeError("Browser page is not available.")
         return self.page
 
+    def _prepare_page(self, page: Page) -> None:
+        page.add_init_script(BLOCK_BROWSER_PROMPTS_SCRIPT)
+        page.on("dialog", lambda dialog: dialog.dismiss())
+
     def current_url(self) -> str:
         page = self.require_page()
         return page.url
 
     def open_url(self, url: str) -> str:
         page = self.require_page()
-        page.goto(url, wait_until="domcontentloaded", timeout=30_000)
+        page.goto(normalize_url(url), wait_until="domcontentloaded", timeout=30_000)
         return f"Opened {page.url}"
 
     def search_web(self, query: str) -> str:
@@ -56,8 +91,31 @@ class BrowserSession:
         page = self.require_page()
         locator = page.get_by_text(text, exact=False).first
         locator.click(timeout=10_000)
-        page.wait_for_load_state("domcontentloaded", timeout=10_000)
+        try:
+            page.wait_for_load_state("domcontentloaded", timeout=10_000)
+        except PlaywrightTimeoutError:
+            pass
         return f"Clicked text matching: {text}"
+
+    def click_at(self, x: float, y: float) -> str:
+        page = self.require_page()
+        page.mouse.click(float(x), float(y))
+        try:
+            page.wait_for_load_state("domcontentloaded", timeout=10_000)
+        except PlaywrightTimeoutError:
+            pass
+        return f"Clicked at ({int(float(x))}, {int(float(y))})"
+
+    def scroll(self, delta_y: float = 600) -> str:
+        page = self.require_page()
+        page.mouse.wheel(0, float(delta_y))
+        return f"Scrolled {int(float(delta_y))} pixels."
+
+    def wait(self, milliseconds: int = 1000) -> str:
+        page = self.require_page()
+        bounded_ms = max(0, min(int(milliseconds), 5000))
+        page.wait_for_timeout(bounded_ms)
+        return f"Waited {bounded_ms} ms."
 
     def type_text(self, selector: str, text: str) -> str:
         page = self.require_page()
@@ -79,3 +137,15 @@ def save_output_file(outputs_dir: Path, filename: str | None, content: str) -> P
     path = safe_output_path(outputs_dir, filename)
     path.write_text(content, encoding="utf-8")
     return path
+
+
+def normalize_url(url: str) -> str:
+    cleaned = str(url or "").strip()
+    if not cleaned:
+        raise ValueError("URL cannot be empty.")
+
+    parsed = urlparse(cleaned)
+    if not parsed.scheme:
+        cleaned = f"https://{cleaned}"
+
+    return cleaned

@@ -11,6 +11,9 @@
   --mint: #75d6b6;
   --coral: #ff8f7c;
   --lemon: #ffd766;
+  --button-blue: #f3fdff;
+  --button-blue-hover: #e5f8fb;
+  --button-blue-line: rgba(92, 184, 195, 0.18);
   --shadow: rgba(35, 49, 63, 0.18);
 }
 
@@ -50,10 +53,10 @@ textarea {
 }
 
 .overlay-shell {
-  width: 340px;
-  height: 188px;
+  width: 360px;
+  height: 248px;
   display: grid;
-  grid-template-columns: 112px 1fr;
+  grid-template-columns: 104px 1fr;
   overflow: hidden;
   border: 1px solid var(--line);
   border-radius: 30px;
@@ -61,6 +64,21 @@ textarea {
   box-shadow:
     inset 0 0 0 1px rgba(255, 255, 255, 0.78),
     0 18px 45px var(--shadow);
+  transition:
+    width 420ms cubic-bezier(0.22, 1, 0.36, 1),
+    height 420ms cubic-bezier(0.22, 1, 0.36, 1),
+    box-shadow 420ms ease;
+}
+
+.overlay-shell.has-reply {
+  width: 400px;
+  height: min(368px, 100vh);
+  grid-template-columns: 106px 1fr;
+}
+
+.overlay-shell.is-opening {
+  width: 390px;
+  height: 310px;
 }
 
 .mascot-panel {
@@ -81,6 +99,20 @@ textarea {
   border-radius: 50%;
   background: #31c96b;
   box-shadow: 0 0 0 4px rgba(49, 201, 107, 0.16);
+  transition:
+    background 220ms ease,
+    box-shadow 260ms ease,
+    transform 260ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.overlay-shell[data-status="awake"] .status-dot,
+.overlay-shell.is-awake .status-dot {
+  background: #69e7ff;
+  box-shadow:
+    0 0 0 5px rgba(105, 231, 255, 0.22),
+    0 0 22px rgba(47, 191, 215, 0.72);
+  transform: scale(1.3);
+  animation: awakePulse 1.15s ease-in-out infinite;
 }
 
 .overlay-shell[data-status="thinking"] .status-dot {
@@ -91,6 +123,14 @@ textarea {
 .overlay-shell[data-status="speaking"] .status-dot {
   background: #4797ff;
   box-shadow: 0 0 0 4px rgba(71, 151, 255, 0.16);
+}
+
+.overlay-shell[data-status="awake"] .mascot-panel,
+.overlay-shell.is-awake .mascot-panel {
+  background:
+    radial-gradient(circle at 28% 22%, #fff1b4, transparent 30%),
+    radial-gradient(circle at 50% 50%, rgba(105, 231, 255, 0.64), transparent 48%),
+    linear-gradient(160deg, #b8f4e4, #c7e8ff);
 }
 
 .overlay-shell[data-status="error"] .status-dot {
@@ -183,9 +223,14 @@ textarea {
 
 .note-panel {
   display: grid;
-  grid-template-rows: 46px 1fr;
+  grid-template-rows: 40px 0fr minmax(78px, 1fr) 36px;
+  gap: 8px;
   min-width: 0;
   padding: 10px 12px 12px 10px;
+}
+
+.overlay-shell.has-reply .note-panel {
+  grid-template-rows: 40px minmax(54px, auto) minmax(72px, 1fr) 36px;
 }
 
 .toolbar {
@@ -208,6 +253,30 @@ textarea {
   font-size: 12px;
   font-weight: 700;
   line-height: 1;
+}
+
+.assistant-reply {
+  min-width: 0;
+  max-height: 116px;
+  margin: 0;
+  overflow: hidden;
+  padding: 0 2px;
+  color: #304153;
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1.32;
+  opacity: 0;
+  transform: translateY(8px);
+  transition:
+    opacity 300ms ease,
+    transform 360ms cubic-bezier(0.22, 1, 0.36, 1),
+    max-height 420ms ease;
+  user-select: text;
+}
+
+.overlay-shell.has-reply .assistant-reply {
+  opacity: 1;
+  transform: translateY(0);
 }
 
 .window-actions {
@@ -255,12 +324,13 @@ textarea {
   height: 100%;
   resize: none;
   border: 1px solid var(--soft-line);
-  border-radius: 20px;
-  padding: 12px 13px;
+  border-radius: 16px;
+  padding: 10px 12px;
   color: var(--ink);
   background: #ffffff;
   outline: none;
-  line-height: 1.35;
+  font-size: 14px;
+  line-height: 1.32;
   user-select: text;
 }
 
@@ -271,6 +341,42 @@ textarea {
 
 .helper-text::placeholder {
   color: var(--muted);
+}
+
+.prompt-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  min-width: 0;
+}
+
+.prompt-actions button {
+  min-width: 0;
+  height: 34px;
+  border: 1px solid var(--button-blue-line);
+  border-radius: 14px;
+  cursor: pointer;
+  color: #315d64;
+  background: var(--button-blue);
+  font-family:
+    "Avenir Next", "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI",
+    sans-serif;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: 0;
+  box-shadow: 0 1px 2px rgba(35, 49, 63, 0.06);
+}
+
+.prompt-actions button:disabled {
+  cursor: wait;
+  opacity: 0.72;
+}
+
+.primary-action:hover,
+.secondary-action:hover {
+  border-color: rgba(80, 134, 176, 0.42);
+  background: var(--button-blue-hover);
 }
 
 .expand-button {
@@ -323,5 +429,19 @@ textarea {
   }
   50% {
     transform: translateY(-3px) scale(1.025);
+  }
+}
+
+@keyframes awakePulse {
+  0%,
+  100% {
+    box-shadow:
+      0 0 0 5px rgba(105, 231, 255, 0.2),
+      0 0 18px rgba(47, 191, 215, 0.64);
+  }
+  50% {
+    box-shadow:
+      0 0 0 9px rgba(105, 231, 255, 0.12),
+      0 0 30px rgba(47, 191, 215, 0.8);
   }
 }

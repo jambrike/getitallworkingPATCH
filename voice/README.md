@@ -1,6 +1,6 @@
 # SILIA
 
-Voice assistant prototype using local Vosk speech recognition. AI responses now come from the local companion service, and speech playback uses the shared OpenAI TTS module in `overlay + TTS`.
+Voice assistant prototype using local Vosk wake detection. By default it sends the recent wake-word audio clip to OpenAI transcription for a cleaner prompt, then sends that prompt to the local companion service. Speech playback uses the shared OpenAI TTS module in `overlay + TTS`.
 
 ## Setup
 
@@ -32,4 +32,24 @@ Run Silia separately, or start it with the root launcher by setting `START_VOICE
 node index.js
 ```
 
-Say `grandson`, then ask your question. You can also say the question in one go, like `grandson what is two plus two`.
+Say `grandson` and your question in one phrase:
+
+```text
+grandson what is two plus two
+```
+
+Saying only `grandson` will not make it listen to the next random sentence. This keeps room noise and the assistant's own spoken reply from becoming a prompt.
+
+## Accuracy Modes
+
+The default mode is:
+
+```env
+VOICE_STT_MODE=hybrid
+OPENAI_TRANSCRIBE_MODEL=gpt-4o-mini-transcribe
+VOICE_TRANSCRIBE_LOOKBACK_MS=8000
+```
+
+In hybrid mode, Vosk only has to catch the wake word. The actual question is transcribed from the recent audio buffer with OpenAI, which is usually much better in a crowd. For fully local recognition, set `VOICE_STT_MODE=local`.
+
+When Vosk detects the wake word, it tells the local companion service so the overlay can show its awake light.

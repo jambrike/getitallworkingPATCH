@@ -3,10 +3,12 @@
 This workspace now runs the five prototypes as one background companion:
 
 - `overlay + TTS` collects typed prompts and speaks replies with OpenAI TTS.
-- `voice` keeps Vosk wake-word speech recognition local.
+- `voice` uses local Vosk for wake detection, then OpenAI transcription to clean up the actual prompt.
 - `screenshot` keeps a small in-memory screen buffer and describes it with OpenAI vision.
 - `agent` runs the local FastAPI companion service and decision layer.
 - `features/laptop-agent-mvp` provides safe browser/file actions.
+
+See `FEATURES.md` for the full feature list, limitations, and next planned improvements.
 
 ## Setup
 
@@ -55,8 +57,42 @@ Start voice input too:
 START_VOICE=1 ./run-companion.sh
 ```
 
-The service listens on `http://127.0.0.1:8765`. The overlay and voice listener both send prompts there. Screenshots are kept in memory and are sent to OpenAI only when a prompt is received.
+The service listens on `http://127.0.0.1:8765`. The overlay and voice listener both send prompts there. Screenshots are kept in memory and the newest screenshot is resized before being sent to OpenAI only when a prompt is received.
+
+Click `Speak` in the overlay to record a short voice prompt directly. The overlay lights up while it is awake/listening, transcribes the clip with OpenAI, then sends the prompt to the same companion service.
+
+For voice, say the wake word and question in the same phrase:
+
+```text
+grandson what am I looking at
+```
+
+Saying only `grandson` no longer opens a free-listening mode. This prevents random room audio or the assistant's own speech from becoming the next prompt.
+
+Voice defaults to `VOICE_STT_MODE=hybrid`: Vosk listens cheaply for the wake word, then the last few seconds of microphone audio are transcribed with OpenAI for better accuracy in noisy rooms. Set `VOICE_STT_MODE=local` if you want Vosk-only recognition.
 
 ## Safety
 
 The first version only automates the Playwright browser and safe file saves. It does not control arbitrary Mac apps. Risky actions involving passwords, payments, banking, messages, uploads, downloads, or other irreversible steps require explicit approval before they run.
+
+## Email And Contacts
+
+Grandson can remember contacts and send email through SMTP. Add these to `.env`:
+
+```env
+SMTP_HOST=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USER=your_email@gmail.com
+SMTP_PASSWORD=your_app_password_here
+SMTP_FROM=your_email@gmail.com
+SMTP_FROM_NAME=Grandson
+```
+
+Example prompts:
+
+```text
+remember Jane as jane@example.com
+send Jane an email saying I will call tomorrow
+```
+
+Contacts are stored locally in `data/contacts.json`. Email sending always asks for approval before sending.

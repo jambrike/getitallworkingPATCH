@@ -17,7 +17,19 @@ async function sendPrompt(text, source = 'overlay', options = {}) {
   return response.json();
 }
 
+async function getHealth(options = {}) {
+  const baseUrl = options.baseUrl || process.env.COMPANION_URL || DEFAULT_COMPANION_URL;
+  const response = await fetch(`${baseUrl.replace(/\/$/, '')}/health`);
+
+  if (!response.ok) {
+    throw new Error(`Companion service returned HTTP ${response.status}.`);
+  }
+
+  return response.json();
+}
+
 module.exports = {
   sendPrompt,
+  getHealth,
   DEFAULT_COMPANION_URL
 };

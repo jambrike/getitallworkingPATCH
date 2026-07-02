@@ -19,10 +19,13 @@ RISKY_WORDS = {
     "install",
     "sudo",
     "password",
-    "login",
     "post",
     "upload",
     "download",
+    "transfer",
+    "card",
+    "passcode",
+    "recovery",
 }
 
 
