@@ -91,8 +91,31 @@ class BrowserSession:
         page = self.require_page()
         locator = page.get_by_text(text, exact=False).first
         locator.click(timeout=10_000)
-        page.wait_for_load_state("domcontentloaded", timeout=10_000)
+        try:
+            page.wait_for_load_state("domcontentloaded", timeout=10_000)
+        except PlaywrightTimeoutError:
+            pass
         return f"Clicked text matching: {text}"
+
+    def click_at(self, x: float, y: float) -> str:
+        page = self.require_page()
+        page.mouse.click(float(x), float(y))
+        try:
+            page.wait_for_load_state("domcontentloaded", timeout=10_000)
+        except PlaywrightTimeoutError:
+            pass
+        return f"Clicked at ({int(float(x))}, {int(float(y))})"
+
+    def scroll(self, delta_y: float = 600) -> str:
+        page = self.require_page()
+        page.mouse.wheel(0, float(delta_y))
+        return f"Scrolled {int(float(delta_y))} pixels."
+
+    def wait(self, milliseconds: int = 1000) -> str:
+        page = self.require_page()
+        bounded_ms = max(0, min(int(milliseconds), 5000))
+        page.wait_for_timeout(bounded_ms)
+        return f"Waited {bounded_ms} ms."
 
     def type_text(self, selector: str, text: str) -> str:
         page = self.require_page()

@@ -23,8 +23,11 @@ SUPPORTED_ACTIONS = {
     "search_web",
     "get_page_text",
     "click_text",
+    "click_at",
     "type_text",
     "press_key",
+    "scroll",
+    "wait",
     "save_file",
     "ask_user",
     "done",
@@ -43,6 +46,8 @@ Do not install software.
 Do not access password managers.
 Ask for explicit user confirmation before irreversible or risky actions.
 Prefer safe research, drafting, and file creation.
+Use click_text for named controls. Use click_at only when the target position is clear.
+Use scroll when the useful item may be below the current viewport.
 When saving research, use clean Markdown with title, table, short notes, and source URLs if available.
 
 Supported actions:
@@ -50,8 +55,11 @@ Supported actions:
 {"action":"search_web","query":"beginner robotics kits Ireland"}
 {"action":"get_page_text"}
 {"action":"click_text","text":"visible link or button text"}
+{"action":"click_at","x":400,"y":300}
 {"action":"type_text","selector":"input[name='q']","text":"hello"}
 {"action":"press_key","key":"Enter"}
+{"action":"scroll","delta_y":600}
+{"action":"wait","milliseconds":1000}
 {"action":"save_file","filename":"result.md","content":"markdown content here"}
 {"action":"ask_user","question":"Should I continue?"}
 {"action":"done","summary":"What was completed"}
@@ -188,10 +196,16 @@ class BrowserAgent:
             result = f"Read {len(snippet)} characters from the page."
         elif name == "click_text":
             result = browser.click_text(str(action["text"]))
+        elif name == "click_at":
+            result = browser.click_at(float(action["x"]), float(action["y"]))
         elif name == "type_text":
             result = browser.type_text(str(action["selector"]), str(action["text"]))
         elif name == "press_key":
             result = browser.press_key(str(action["key"]))
+        elif name == "scroll":
+            result = browser.scroll(float(action.get("delta_y", 600)))
+        elif name == "wait":
+            result = browser.wait(int(action.get("milliseconds", 1000)))
         elif name == "save_file":
             path = save_output_file(
                 self.outputs_dir,

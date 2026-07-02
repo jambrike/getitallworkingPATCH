@@ -19,13 +19,16 @@
   - open a URL
   - open common sites like YouTube or Netflix directly from commands such as "open YouTube"
   - open arbitrary website names by guessing the normal `.com` address, such as "open Amazon"
-  - run up to three safe browser/file actions from one prompt
+  - run up to five ordinary browser/file actions from one prompt
   - read visible page text
   - click visible text
+  - click a clear screen coordinate inside the Playwright browser
   - type into a selector
   - press a key
+  - scroll the browser page
+  - wait briefly for pages or menus to load
   - save a file
-- Safety approval gate for risky actions involving passwords, payments, banking, sending, deleting, uploads, downloads, purchases, and similar irreversible steps.
+- Safety approval gate for high-risk actions involving passwords, payments, banking, sending, deleting, uploads, downloads, purchases, installs, private codes, account recovery, and similar irreversible steps.
 - Root launcher:
 
 ```bash
@@ -34,7 +37,7 @@ START_VOICE=1 ./run-companion.sh
 
 ## Current Limitations
 
-- Desktop-wide control is not enabled; actions are limited to the Playwright browser and safe file saves.
+- Desktop-wide control is not enabled; clicks and scrolling happen inside the Playwright browser window, and file saves stay inside the feature-agent outputs folder.
 - Voice recognition uses local Vosk and may mishear noisy rooms.
 - Voice only responds when the wake word and question are in the same phrase, such as `grandson what am I looking at`.
 - macOS Screen Recording and Microphone permissions must be granted manually.

@@ -34,13 +34,9 @@ from simple_agent import CAPABILITIES, validate_actions
 
 try:
     from browser_tools import BrowserSession, save_output_file
-    from safety import action_has_risk
 except Exception:
     BrowserSession = None  # type: ignore[assignment]
     save_output_file = None  # type: ignore[assignment]
-
-    def action_has_risk(_action: dict[str, Any]) -> bool:
-        return True
 
 
 load_dotenv(ROOT_DIR / ".env")
@@ -53,7 +49,7 @@ DEFAULT_SCREEN_INTERVAL = 5.0
 DEFAULT_SCREEN_BUFFER_SIZE = 3
 DEFAULT_DECISION_MAX_TOKENS = 360
 DEFAULT_SCREEN_MAX_WIDTH = 1024
-DEFAULT_MAX_ACTIONS_PER_PROMPT = 3
+DEFAULT_MAX_ACTIONS_PER_PROMPT = 5
 CONTROL_COMMANDS = {
     "reset context": "reset",
     "forget that": "forget",
@@ -118,8 +114,11 @@ DECISION_SCHEMA: dict[str, Any] = {
                                 "search_web",
                                 "get_page_text",
                                 "click_text",
+                                "click_at",
                                 "type_text",
                                 "press_key",
+                                "scroll",
+                                "wait",
                                 "save_file",
                                 "ask_user",
                                 "done",
@@ -151,16 +150,18 @@ Priorities:
    urgent warnings, messages, downloads, uploads, deletion, and purchases.
 6. Never repeat private details from the screen. Refer to them generally.
 7. Use only the actions listed in the input.
-8. Prefer one useful next action, but you may return up to three safe actions
-   for simple browser tasks.
+8. Prefer one useful next action, but you may return up to five ordinary
+   browser/file actions for simple tasks.
 9. If the user asks to open a website, use open_url with a full https URL.
+10. Use click_text for visible labels and click_at only when the screenshot
+    makes the target position clear. Use scroll if the page likely needs it.
 
 Return JSON only.
 
 Response fields:
 - say: what to speak out loud, concise and direct.
 - run_in_background: true only if an action should run.
-- actions: zero to three actions. Keep them safe and directly useful.
+- actions: zero to five actions. Keep them safe and directly useful.
 - memory_note: one compact note for future context, or empty string.
 - needs_action: true if the user wants something done or guided.
 - status: short machine-readable status such as ok, acted, needs_clarification,
@@ -179,23 +180,44 @@ APPROVAL_PHRASES = {
 HIGH_RISK_TERMS = {
     "bank",
     "banking",
+    "buy",
+    "card",
     "card number",
     "checkout",
+    "delete",
+    "download",
+    "email",
     "gift card",
+    "install",
     "identity",
-    "login",
+    "message",
     "one-time code",
     "passcode",
     "password",
     "payment",
+    "post",
     "purchase",
     "recovery",
     "remote access",
     "security warning",
+    "send",
     "send money",
     "social security",
+    "sudo",
     "submit",
     "transfer",
+    "upload",
+}
+SENSITIVE_TYPE_TERMS = {
+    "card",
+    "code",
+    "cvv",
+    "otp",
+    "passcode",
+    "password",
+    "pin",
+    "security answer",
+    "social security",
 }
 
 
@@ -303,10 +325,16 @@ class BrowserActionRunner:
             return f"Read {len(text)} characters from the page."
         if name == "click_text":
             return browser.click_text(str(action["text"]))
+        if name == "click_at":
+            return browser.click_at(float(action["x"]), float(action["y"]))
         if name == "type_text":
             return browser.type_text(str(action["selector"]), str(action["text"]))
         if name == "press_key":
             return browser.press_key(str(action["key"]))
+        if name == "scroll":
+            return browser.scroll(float(action.get("delta_y", 600)))
+        if name == "wait":
+            return browser.wait(int(action.get("milliseconds", 1000)))
         if name == "save_file":
             path = save_output_file(
                 self.outputs_dir,
@@ -557,9 +585,11 @@ def slugify_site_target(target: str) -> str:
 
 
 def should_require_approval(action: dict[str, Any]) -> bool:
-    if action_has_risk(action):
-        return True
     combined = json.dumps(action, ensure_ascii=False).lower()
+    if str(action.get("action") or "") == "type_text" and any(
+        term in combined for term in SENSITIVE_TYPE_TERMS
+    ):
+        return True
     return any(term in combined for term in HIGH_RISK_TERMS)
 
 
