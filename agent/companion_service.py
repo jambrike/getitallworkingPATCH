@@ -60,6 +60,18 @@ CONTROL_COMMANDS = {
     "cancel": "cancel",
 }
 OPEN_SITE_VERBS = r"(?:open up|open|go to|launch|bring up|show me)"
+EMAIL_BODY_MARKERS = (
+    "saying",
+    "that says",
+    "to say",
+    "and say",
+    "message",
+    "telling them",
+    "tell them",
+    "tell him",
+    "tell her",
+    "that",
+)
 OPEN_TARGET_CLEANUPS = (
     "for me",
     "please",
@@ -187,6 +199,17 @@ APPROVAL_PHRASES = {
     "go ahead",
     "continue",
     "do it",
+}
+REJECTION_PHRASES = {
+    "no",
+    "no thanks",
+    "don't",
+    "dont",
+    "do not",
+    "cancel",
+    "stop",
+    "never mind",
+    "nevermind",
 }
 HIGH_RISK_TERMS = {
     "bank",
@@ -539,6 +562,14 @@ def handle_prompt(request: PromptRequest) -> PromptResponse:
 
         if state.pending_action and is_approval(text):
             return execute_pending_action(text)
+        if state.pending_action and is_rejection(text):
+            state.pending_action = None
+            state.remember("User rejected pending action.", request.source, "cancelled")
+            return PromptResponse(say="Okay, I will not send it.", run_in_background=False, actions=[], status="cancelled")
+
+        direct_email = direct_email_decision(text)
+        if direct_email is not None:
+            return execute_decision(request.source, text, direct_email)
 
         direct_decision = direct_site_open_decision(text)
         if direct_decision is not None:
@@ -562,7 +593,7 @@ def execute_pending_action(approval_text: str) -> PromptResponse:
 
     try:
         result = execute_action(action)
-        say = "Okay, I did that."
+        say = "Email sent." if action.get("action") == "send_email" else "Okay, I did that."
         status = "acted"
     except Exception as exc:
         result = f"Action failed: {exc}"
@@ -589,7 +620,7 @@ def execute_decision(source: str, text: str, decision: dict[str, Any]) -> Prompt
             if should_require_approval(action):
                 state.pending_action = action
                 completed_actions.append(action)
-                say = say or "That could affect something important. Please say yes if you want me to continue."
+                say = approval_message(action, say)
                 status = "approval_required"
                 break
 
@@ -607,7 +638,7 @@ def execute_decision(source: str, text: str, decision: dict[str, Any]) -> Prompt
     if state.pending_action is not None:
         status = "approval_required"
         if not say:
-            say = say or "That could affect something important. Please say yes if you want me to continue."
+            say = approval_message(state.pending_action)
 
     state.remember(memory_note or f"User asked: {text}", source, status, action_result)
     return PromptResponse(say=say, run_in_background=run_in_background, actions=completed_actions, status=status)
@@ -709,6 +740,133 @@ def direct_site_open_decision(text: str) -> dict[str, Any] | None:
     return None
 
 
+def direct_email_decision(text: str) -> dict[str, Any] | None:
+    cleaned = " ".join(text.strip().split())
+    normalized = cleaned.lower()
+    if not re.search(r"\b(send|email|mail)\b", normalized):
+        return None
+    if not re.search(r"\b(email|mail)\b", normalized):
+        return None
+
+    recipient = extract_email_recipient(cleaned)
+    body = extract_email_body(cleaned)
+    subject = extract_email_subject(cleaned) or "Quick note"
+
+    if not recipient:
+        return {
+            "say": "Who should I send the email to?",
+            "run_in_background": False,
+            "actions": [],
+            "memory_note": "User wanted to send an email but recipient was unclear.",
+            "needs_action": True,
+            "status": "needs_clarification",
+        }
+
+    to_email = resolve_email_recipient(recipient)
+    if not to_email:
+        return {
+            "say": f"I do not have an email address saved for {recipient}.",
+            "run_in_background": False,
+            "actions": [],
+            "memory_note": f"Email recipient missing for {recipient}.",
+            "needs_action": True,
+            "status": "needs_clarification",
+        }
+
+    if not body:
+        return {
+            "say": f"What should I say to {recipient}?",
+            "run_in_background": False,
+            "actions": [],
+            "memory_note": f"User wanted to email {recipient}, but body was unclear.",
+            "needs_action": True,
+            "status": "needs_clarification",
+        }
+
+    action = {
+        "action": "send_email",
+        "to": to_email,
+        "subject": subject,
+        "body": body,
+    }
+    return {
+        "say": approval_message(action),
+        "run_in_background": True,
+        "actions": [action],
+        "memory_note": f"Drafted email to {recipient}; waiting for approval.",
+        "needs_action": True,
+        "status": "approval_required",
+    }
+
+
+def extract_email_recipient(text: str) -> str:
+    email_match = re.search(r"\b[^@\s]+@[^@\s]+\.[^@\s]+\b", text)
+    if email_match:
+        return email_match.group(0)
+
+    contacts = state.action_runner.contacts.summary()
+    normalized = text.lower()
+    for contact in contacts:
+        name = str(contact.get("name") or "")
+        if name and re.search(rf"\b{re.escape(name.lower())}\b", normalized):
+            return name
+
+    recipient_patterns = (
+        r"\b(?:send|write)\s+([a-z][a-z .'-]{0,60}?)\s+(?:an\s+)?(?:email|mail)\b",
+        r"\b(?:send|write)\s+(?:an\s+)?(?:email|mail)\s+to\s+([a-z][a-z .'-]{0,60}?)(?:\s+(?:saying|that|to say|message|about)\b|$)",
+        r"\b(?:email|mail)\s+([a-z][a-z .'-]{0,60}?)(?:\s+(?:saying|that|to say|message|about)\b|$)",
+    )
+    for pattern in recipient_patterns:
+        match = re.search(pattern, text, flags=re.IGNORECASE)
+        if match:
+            return clean_email_fragment(match.group(1))
+
+    return ""
+
+
+def clean_email_fragment(value: str) -> str:
+    cleaned = str(value or "").strip(" ,.!?")
+    cleaned = re.sub(r"\b(?:an|a|the|email|mail|please|for me)\b", " ", cleaned, flags=re.IGNORECASE)
+    return " ".join(cleaned.split()).strip(" ,.!?")
+
+
+def extract_email_body(text: str) -> str:
+    subject_split = re.split(r"\bbody\b\s*:?", text, maxsplit=1, flags=re.IGNORECASE)
+    if len(subject_split) == 2:
+        return clean_email_body(subject_split[1])
+
+    lowered = text.lower()
+    best_index = -1
+    best_marker = ""
+    for marker in EMAIL_BODY_MARKERS:
+        index = lowered.find(marker)
+        if index >= 0 and (best_index == -1 or index < best_index):
+            best_index = index
+            best_marker = marker
+
+    if best_index == -1:
+        return ""
+
+    return clean_email_body(text[best_index + len(best_marker):])
+
+
+def clean_email_body(value: str) -> str:
+    cleaned = str(value or "").strip(" :,.!?")
+    cleaned = re.sub(r"^(?:to\s+)?", "", cleaned, flags=re.IGNORECASE)
+    return cleaned.strip()
+
+
+def extract_email_subject(text: str) -> str:
+    match = re.search(
+        r"\bsubject\b\s*(?:is|:)?\s+(.+?)(?:\s+\b(?:body|saying|that says|to say|message)\b|$)",
+        text,
+        flags=re.IGNORECASE,
+    )
+    if not match:
+        return ""
+    return match.group(1).strip(" :,.!?")[:120]
+
+
 def extract_open_target(text: str) -> str:
     match = re.search(rf"\b{OPEN_SITE_VERBS}\b\s+(.+)$", text)
     if not match:
@@ -751,9 +909,27 @@ def should_require_approval(action: dict[str, Any]) -> bool:
     return any(term in combined for term in HIGH_RISK_TERMS)
 
 
+def approval_message(action: dict[str, Any], fallback: str = "") -> str:
+    if action.get("action") == "send_email":
+        to_email = resolve_email_recipient(str(action.get("to") or action.get("name") or ""))
+        subject = str(action.get("subject") or "").strip() or "Quick note"
+        body = compact_text(str(action.get("body") or "").strip(), limit=180)
+        return (
+            f"Draft ready. To {to_email}. Subject: {subject}. "
+            f"Message: {body}. Say yes to send, or cancel."
+        )
+
+    return fallback or "That could affect something important. Please say yes if you want me to continue."
+
+
 def is_approval(text: str) -> bool:
     normalized = " ".join(text.lower().replace(".", "").split())
     return normalized in APPROVAL_PHRASES
+
+
+def is_rejection(text: str) -> bool:
+    normalized = " ".join(text.lower().replace(".", "").split())
+    return normalized in REJECTION_PHRASES
 
 
 def handle_control_command(text: str) -> PromptResponse | None:

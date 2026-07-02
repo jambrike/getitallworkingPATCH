@@ -96,3 +96,4 @@ send Jane an email saying I will call tomorrow
 ```
 
 Contacts are stored locally in `data/contacts.json`. Email sending always asks for approval before sending.
+For example, `send Colm an email saying I will call tomorrow` should reply with the draft details and wait for you to say `yes` before it sends.
