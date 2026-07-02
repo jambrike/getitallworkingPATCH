@@ -82,10 +82,8 @@ fi
 
 cd "\$ROOT_DIR"
 notify "Starting Grandson..."
-/usr/bin/nohup /bin/zsh -lc "export PATH=\"\$APP_PATH_EXPORT:\\\$PATH\"; cd \"\$ROOT_DIR\"; START_VOICE=1 ./run-companion.sh" >>"\$LOG_FILE" 2>&1 &
-echo "\$!" >"\$PID_FILE"
-
-exit 0
+echo "\$\$" >"\$PID_FILE"
+exec /bin/zsh -lc "export PATH=\"\$APP_PATH_EXPORT:\\\$PATH\"; cd \"\$ROOT_DIR\"; START_VOICE=1 ./run-companion.sh" >>"\$LOG_FILE" 2>&1
 LAUNCHER
 
 chmod +x "$EXECUTABLE"
