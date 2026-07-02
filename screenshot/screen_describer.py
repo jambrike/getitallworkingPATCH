@@ -20,6 +20,7 @@ import argparse
 import base64
 import io
 import os
+import platform
 import sys
 from datetime import datetime
 from pathlib import Path
@@ -127,18 +128,50 @@ step, such as making the window larger or asking again.
 
 
 def capture_screen() -> bytes:
-    """Return a PNG screenshot of the current primary screen."""
+    """Return a PNG screenshot of the current screen.
+
+    Windows can capture all monitors with Pillow's all_screens flag. macOS and
+    Linux keep Pillow's default behavior because their capture backends differ.
+    """
     try:
-        screenshot = ImageGrab.grab()
+        screenshot = grab_screen_image()
     except Exception as exc:
-        raise RuntimeError(
-            "Could not capture the screen. On macOS, grant Screen Recording "
-            "permission to your terminal app, then try again."
-        ) from exc
+        raise RuntimeError(screen_capture_help()) from exc
 
     buffer = io.BytesIO()
     screenshot.save(buffer, format="PNG")
     return buffer.getvalue()
+
+
+def grab_screen_image():
+    if platform.system() == "Windows":
+        all_screens = os.environ.get("SCREENSHOT_ALL_SCREENS", "1") != "0"
+        try:
+            return ImageGrab.grab(all_screens=all_screens)
+        except TypeError:
+            return ImageGrab.grab()
+
+    return ImageGrab.grab()
+
+
+def screen_capture_help() -> str:
+    if platform.system() == "Windows":
+        return (
+            "Could not capture the screen on Windows. Make sure this app is "
+            "running in your normal desktop session, not as a background "
+            "service or administrator session with a different desktop."
+        )
+
+    if platform.system() == "Darwin":
+        return (
+            "Could not capture the screen. On macOS, grant Screen Recording "
+            "permission to your terminal app, then try again."
+        )
+
+    return (
+        "Could not capture the screen. Make sure a graphical desktop session "
+        "is available and Pillow supports screen capture on this system."
+    )
 
 
 def image_bytes_to_base64(image_bytes: bytes) -> str:
@@ -322,3 +355,4 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
+

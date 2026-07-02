@@ -27,8 +27,9 @@ function getPlaybackCommand(filePath, options = {}) {
       command: 'powershell.exe',
       args: [
         '-NoProfile',
+        '-STA',
         '-Command',
-        `(New-Object Media.SoundPlayer '${escapePowerShellPath(filePath)}').PlaySync();`
+        createWindowsPlaybackScript(filePath)
       ]
     };
   }
@@ -48,9 +49,15 @@ function getPlaybackCommand(filePath, options = {}) {
 
 function runPlaybackCommand({ command, args }) {
   return new Promise((resolve, reject) => {
+    let stderr = '';
+
     const child = spawn(command, args, {
-      stdio: 'ignore',
+      stdio: ['ignore', 'ignore', 'pipe'],
       windowsHide: true
+    });
+
+    child.stderr.on('data', (chunk) => {
+      stderr += chunk.toString();
     });
 
     child.on('error', (error) => {
@@ -63,9 +70,30 @@ function runPlaybackCommand({ command, args }) {
         return;
       }
 
-      reject(new Error(`Audio playback failed with exit code ${code}.`));
+      const details = stderr.trim();
+      reject(new Error(`Audio playback failed with exit code ${code}.${details ? ` ${details}` : ''}`));
     });
   });
+}
+
+function createWindowsPlaybackScript(filePath) {
+  const escapedPath = escapePowerShellPath(filePath);
+
+  return [
+    'Add-Type -AssemblyName PresentationCore;',
+    '$ErrorActionPreference = "Stop";',
+    `$path = '${escapedPath}';`,
+    '$player = New-Object System.Windows.Media.MediaPlayer;',
+    '$done = $false;',
+    '$failed = $null;',
+    '$player.add_MediaEnded({ $script:done = $true });',
+    '$player.add_MediaFailed({ param($sender, $eventArgs) $script:failed = $eventArgs.ErrorException.Message; $script:done = $true });',
+    '$player.Open([Uri]::new((Resolve-Path -LiteralPath $path).Path));',
+    '$player.Play();',
+    'while (-not $done) { Start-Sleep -Milliseconds 100; }',
+    '$player.Close();',
+    'if ($failed) { Write-Error $failed; exit 1; }'
+  ].join(' ');
 }
 
 function escapePowerShellPath(filePath) {

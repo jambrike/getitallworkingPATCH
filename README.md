@@ -41,7 +41,53 @@ Install the Vosk model if you want voice input:
 (cd voice && bash scripts/install-vosk-model.sh)
 ```
 
-## Run
+
+## Windows 10 Setup
+
+Run these commands from PowerShell in the repo root:
+
+```powershell
+Copy-Item .env.example .env
+notepad .env
+```
+
+Add your `OPENAI_API_KEY` in `.env`, then install dependencies:
+
+```powershell
+py -3 -m pip install -r agent/requirements.txt
+py -3 -m pip install -r screenshot/requirements.txt
+py -3 -m pip install -r features/laptop-agent-mvp/requirements.txt
+py -3 -m playwright install chromium
+
+Set-Location "overlay + TTS"
+npm install
+Set-Location ..
+```
+
+Start the companion service and overlay:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\run-companion.ps1
+```
+
+Start voice too:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\run-companion.ps1 -StartVoice
+```
+
+Screenshot notes for Windows:
+
+- The screenshot module uses Pillow `ImageGrab` and captures all monitors by default on Windows.
+- To capture only the primary screen, set `SCREENSHOT_ALL_SCREENS=0` in `.env`.
+- Run it from your normal signed-in desktop session. Windows screen capture will not work correctly from a background service or a different desktop session.
+
+Test screenshot capture by saving a screenshot locally:
+
+```powershell
+py -3 screenshot\screen_describer.py --save "what is on screen?"
+```
+## macOS/Linux Run
 
 Start the companion service and overlay:
 
@@ -60,3 +106,5 @@ The service listens on `http://127.0.0.1:8765`. The overlay and voice listener b
 ## Safety
 
 The first version only automates the Playwright browser and safe file saves. It does not control arbitrary Mac apps. Risky actions involving passwords, payments, banking, messages, uploads, downloads, or other irreversible steps require explicit approval before they run.
+
+

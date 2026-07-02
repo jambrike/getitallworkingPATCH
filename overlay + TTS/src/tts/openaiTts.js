@@ -10,7 +10,7 @@ const { preprocessText } = require('./preprocessText');
 const pipelineAsync = promisify(pipeline);
 const DEFAULT_TTS_MODEL = 'gpt-4o-mini-tts';
 const DEFAULT_TTS_VOICE = 'alloy';
-const DEFAULT_AUDIO_FORMAT = 'wav';
+const DEFAULT_AUDIO_FORMAT = 'mp3';
 
 function createTempAudioPath(format = DEFAULT_AUDIO_FORMAT) {
   const fileName = `openai-tts-${process.pid}-${Date.now()}.${format}`;
@@ -127,3 +127,4 @@ module.exports = {
   createTempAudioPath,
   getTtsConfig
 };
+
