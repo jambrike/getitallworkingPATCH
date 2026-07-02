@@ -179,7 +179,6 @@ function choosePrompt(cleanPrompt, cleanText, voskPrompt) {
 
 function getPromptAfterWakeWord(text) {
     text = String(text || '').toLowerCase().trim();
-    const filler = String.raw`(?:hey|okay|ok|yo|um|uh|please)?`;
     const wakeVariants = [
         String.raw`grandson`,
         String.raw`grand son`,
@@ -187,9 +186,15 @@ function getPromptAfterWakeWord(text) {
         String.raw`grand sun`,
         String.raw`granson`
     ];
-    const wakeWordRegex = new RegExp(`^${filler}\\s*\\b(?:${wakeVariants.join('|')})\\b\\s*(.*)$`);
-    const match = text.match(wakeWordRegex);
-    return match ? match[1].trim() : null;
+    const wakeWordRegex = new RegExp(`(?:^|\\s)\\b(?:${wakeVariants.join('|')})\\b`, 'g');
+    let match;
+    let prompt = null;
+
+    while ((match = wakeWordRegex.exec(text)) !== null) {
+        prompt = text.slice(match.index + match[0].length).trim();
+    }
+
+    return prompt;
 }
 
 function isUsablePrompt(prompt) {
