@@ -191,14 +191,34 @@ Response fields:
   approval_required, screen_unavailable, or done.
 """.strip()
 APPROVAL_PHRASES = {
-    "yes",
-    "yes do it",
-    "yes, do it",
-    "approve",
+    "alright",
     "approved",
-    "go ahead",
+    "approve",
+    "carry on",
     "continue",
     "do it",
+    "fine",
+    "go ahead",
+    "go for it",
+    "go on",
+    "good",
+    "looks good",
+    "ok",
+    "okay",
+    "perfect",
+    "please do",
+    "send",
+    "send it",
+    "send that",
+    "sure",
+    "that is fine",
+    "that's fine",
+    "yep",
+    "yes",
+    "yes, do it",
+    "yes do it",
+    "yeah",
+    "yeah send it",
 }
 REJECTION_PHRASES = {
     "no",
@@ -560,12 +580,12 @@ def handle_prompt(request: PromptRequest) -> PromptResponse:
         if control_response is not None:
             return control_response
 
-        if state.pending_action and is_approval(text):
-            return execute_pending_action(text)
         if state.pending_action and is_rejection(text):
             state.pending_action = None
             state.remember("User rejected pending action.", request.source, "cancelled")
             return PromptResponse(say="Okay, I will not send it.", run_in_background=False, actions=[], status="cancelled")
+        if state.pending_action and is_approval(text):
+            return execute_pending_action(text)
 
         direct_email = direct_email_decision(text)
         if direct_email is not None:
@@ -916,20 +936,34 @@ def approval_message(action: dict[str, Any], fallback: str = "") -> str:
         body = compact_text(str(action.get("body") or "").strip(), limit=180)
         return (
             f"Draft ready. To {to_email}. Subject: {subject}. "
-            f"Message: {body}. Say yes to send, or cancel."
+            f"Message: {body}. Say send it, looks good, or cancel."
         )
 
     return fallback or "That could affect something important. Please say yes if you want me to continue."
 
 
 def is_approval(text: str) -> bool:
-    normalized = " ".join(text.lower().replace(".", "").split())
-    return normalized in APPROVAL_PHRASES
+    normalized = normalize_confirmation_text(text)
+    if normalized in APPROVAL_PHRASES:
+        return True
+
+    positive_patterns = (
+        r"\b(yes|yeah|yep|yup|ok|okay|sure|fine|perfect|approved|approve)\b",
+        r"\b(send|send it|send that|go ahead|go on|go for it|do it|carry on|continue)\b",
+        r"\b(looks good|that looks good|that is fine|that's fine|all good)\b",
+    )
+    return any(re.search(pattern, normalized) for pattern in positive_patterns)
 
 
 def is_rejection(text: str) -> bool:
-    normalized = " ".join(text.lower().replace(".", "").split())
-    return normalized in REJECTION_PHRASES
+    normalized = normalize_confirmation_text(text)
+    if normalized in REJECTION_PHRASES:
+        return True
+    return bool(re.search(r"\b(no|nope|nah|cancel|stop|don't|dont|do not|never mind|nevermind)\b", normalized))
+
+
+def normalize_confirmation_text(text: str) -> str:
+    return " ".join(str(text or "").lower().replace(".", "").replace(",", "").split())
 
 
 def handle_control_command(text: str) -> PromptResponse | None:
