@@ -178,6 +178,8 @@ Priorities:
     save. Use lookup_contact when you need a saved email address. Use send_email
     only when recipient, subject, and body are clear.
 12. Sending email is allowed, but it must pause for approval before it is sent.
+13. If a previous email was sent and the user asks to send another email,
+    treat it as a new task. Do not say it was already sent unless the user asks.
 
 Return JSON only.
 
@@ -296,6 +298,7 @@ class CompanionState:
     def __init__(self) -> None:
         self.memory: deque[dict[str, Any]] = deque(maxlen=int(os.getenv("MEMORY_LIMIT", DEFAULT_MEMORY_LIMIT)))
         self.pending_action: dict[str, Any] | None = None
+        self.last_email_action: dict[str, Any] | None = None
         self.pending_screen_description = ""
         self.voice_awake_until = 0.0
         self.screen_buffer = ScreenContextBuffer(
@@ -348,6 +351,7 @@ class CompanionState:
     def reset_memory(self) -> None:
         self.memory.clear()
         self.pending_action = None
+        self.last_email_action = None
         self.pending_screen_description = ""
 
     def forget_last(self) -> None:
@@ -615,6 +619,8 @@ def execute_pending_action(approval_text: str) -> PromptResponse:
         result = execute_action(action)
         say = "Email sent." if action.get("action") == "send_email" else "Okay, I did that."
         status = "acted"
+        if action.get("action") == "send_email" and not result.lower().startswith("action failed:"):
+            state.last_email_action = dict(action)
     except Exception as exc:
         result = f"Action failed: {exc}"
         say = "I tried, but that did not work."
@@ -648,6 +654,9 @@ def execute_decision(source: str, text: str, decision: dict[str, Any]) -> Prompt
             completed_actions.append(action)
             action_results.append(result)
             status = "acted"
+
+            if action.get("action") == "send_email" and not result.lower().startswith("action failed:"):
+                state.last_email_action = dict(action)
 
             if result.lower().startswith("action failed:"):
                 break
@@ -763,12 +772,18 @@ def direct_site_open_decision(text: str) -> dict[str, Any] | None:
 def direct_email_decision(text: str) -> dict[str, Any] | None:
     cleaned = " ".join(text.strip().split())
     normalized = cleaned.lower()
-    if not re.search(r"\b(send|email|mail)\b", normalized):
+    is_followup_email = is_followup_email_request(normalized)
+    if not re.search(r"\b(send|email|mail)\b", normalized) and not is_followup_email:
         return None
-    if not re.search(r"\b(email|mail)\b", normalized):
+    if not re.search(r"\b(email|mail)\b", normalized) and not is_followup_email:
         return None
 
     recipient = extract_email_recipient(cleaned)
+    if normalize_contact_name(recipient) in {"another", "one more", "another one", "second", "new one"}:
+        recipient = ""
+    if not recipient and is_followup_email and state.last_email_action:
+        recipient = str(state.last_email_action.get("to") or state.last_email_action.get("name") or "")
+
     body = extract_email_body(cleaned)
     subject = extract_email_subject(cleaned) or "Quick note"
 
@@ -819,6 +834,18 @@ def direct_email_decision(text: str) -> dict[str, Any] | None:
     }
 
 
+def is_followup_email_request(text: str) -> bool:
+    if not state.last_email_action:
+        return False
+    return bool(
+        re.search(
+            r"\b(?:send|write|email|mail)\b.*\b(?:another|one more|another one|second|new one)\b",
+            text,
+        )
+        or re.search(r"\b(?:another|one more|another one|second|new one)\b.*\b(?:email|mail|message|note)\b", text)
+    )
+
+
 def extract_email_recipient(text: str) -> str:
     email_match = re.search(r"\b[^@\s]+@[^@\s]+\.[^@\s]+\b", text)
     if email_match:
@@ -859,8 +886,8 @@ def extract_email_body(text: str) -> str:
     best_index = -1
     best_marker = ""
     for marker in EMAIL_BODY_MARKERS:
-        index = lowered.find(marker)
-        if index >= 0 and (best_index == -1 or index < best_index):
+        index = lowered.rfind(marker)
+        if index >= 0 and index > best_index:
             best_index = index
             best_marker = marker
 
