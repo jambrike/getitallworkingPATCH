@@ -950,7 +950,7 @@ def is_approval(text: str) -> bool:
     positive_patterns = (
         r"\b(yes|yeah|yep|yup|ok|okay|sure|fine|perfect|approved|approve)\b",
         r"\b(send|send it|send that|go ahead|go on|go for it|do it|carry on|continue)\b",
-        r"\b(looks good|that looks good|that is fine|that's fine|all good)\b",
+        r"\b(looks good|that looks good|that is fine|thats fine|that's fine|all good)\b",
     )
     return any(re.search(pattern, normalized) for pattern in positive_patterns)
 
