@@ -6,6 +6,8 @@ import os
 import sys
 import threading
 import time
+import base64
+import io
 from collections import deque
 from pathlib import Path
 from typing import Any
@@ -13,6 +15,7 @@ from typing import Any
 from dotenv import load_dotenv
 from fastapi import FastAPI
 from pydantic import BaseModel, Field
+from PIL import Image
 
 ROOT_DIR = Path(__file__).resolve().parents[1]
 AGENT_DIR = Path(__file__).resolve().parent
@@ -24,9 +27,9 @@ for import_path in (str(AGENT_DIR), str(SCREENSHOT_DIR), str(FEATURES_DIR)):
         sys.path.insert(0, import_path)
 
 from screen_context_agent import ScreenContextBuffer, capture_loop, wait_for_initial_screenshot
-from screen_describer import DEFAULT_MAX_TOKENS, DEFAULT_MODEL, capture_screen, describe_screen_context
+from screen_describer import DEFAULT_MODEL, capture_screen
 
-from simple_agent import build_input, call_openai, load_system_prompt, validate_actions
+from simple_agent import CAPABILITIES, validate_actions
 
 try:
     from browser_tools import BrowserSession, save_output_file
@@ -47,7 +50,84 @@ DEFAULT_SERVICE_PORT = 8765
 DEFAULT_MEMORY_LIMIT = 12
 DEFAULT_SCREEN_INTERVAL = 5.0
 DEFAULT_SCREEN_BUFFER_SIZE = 3
-DEFAULT_VISION_MAX_TOKENS = 300
+DEFAULT_DECISION_MAX_TOKENS = 500
+DEFAULT_SCREEN_MAX_WIDTH = 1024
+CONTROL_COMMANDS = {
+    "reset context": "reset",
+    "forget that": "forget",
+    "cancel": "cancel",
+}
+DECISION_SCHEMA: dict[str, Any] = {
+    "name": "companion_decision",
+    "schema": {
+        "type": "object",
+        "additionalProperties": False,
+        "required": ["say", "run_in_background", "actions", "memory_note", "needs_action", "status"],
+        "properties": {
+            "say": {"type": "string"},
+            "run_in_background": {"type": "boolean"},
+            "needs_action": {"type": "boolean"},
+            "status": {"type": "string"},
+            "memory_note": {"type": "string"},
+            "actions": {
+                "type": "array",
+                "items": {
+                    "type": "object",
+                    "additionalProperties": True,
+                    "required": ["action"],
+                    "properties": {
+                        "action": {
+                            "type": "string",
+                            "enum": [
+                                "open_url",
+                                "search_web",
+                                "get_page_text",
+                                "click_text",
+                                "type_text",
+                                "press_key",
+                                "save_file",
+                                "ask_user",
+                                "done",
+                            ],
+                        }
+                    },
+                },
+            },
+        },
+    },
+    "strict": False,
+}
+DECISION_SYSTEM_PROMPT = """
+You are Grandson, a fast practical computer helper for older Mac users.
+
+The user may type in an overlay or speak through a wake word. You receive their
+prompt, compact recent memory, available browser/file actions, and usually one
+current screenshot.
+
+Priorities:
+1. Help the user do the next useful thing. Start with the practical answer.
+2. Describe the screen only when asked, when safety needs it, or when it helps
+   explain the next step.
+3. Keep spoken replies short: usually one to three short sentences.
+4. If the user asks for a task, guide or choose one safe action instead of
+   narrating the whole screen.
+5. Be careful with passwords, banking, payments, identity, remote access,
+   urgent warnings, messages, downloads, uploads, deletion, and purchases.
+6. Never repeat private details from the screen. Refer to them generally.
+7. Use only the actions listed in the input.
+8. Prefer a single useful next action. Do not create long speculative plans.
+
+Return JSON only.
+
+Response fields:
+- say: what to speak out loud.
+- run_in_background: true only if an action should run.
+- actions: zero or one action unless a save_file after research is clearly ready.
+- memory_note: one compact note for future context, or empty string.
+- needs_action: true if the user wants something done or guided.
+- status: short machine-readable status such as ok, acted, needs_clarification,
+  approval_required, screen_unavailable, or done.
+""".strip()
 APPROVAL_PHRASES = {
     "yes",
     "yes do it",
@@ -130,8 +210,29 @@ class CompanionState:
             return "No previous context yet."
         return json.dumps(list(self.memory), ensure_ascii=False, indent=2)
 
-    def remember(self, item: dict[str, Any]) -> None:
-        self.memory.append(item)
+    def remember(self, note: str, source: str, status: str, action_result: str = "") -> None:
+        note = compact_text(note)
+        if not note and not action_result:
+            return
+
+        self.memory.append(
+            {
+                "source": source,
+                "note": note,
+                "status": status,
+                "action_result": compact_text(action_result, limit=220),
+                "time": int(time.time()),
+            }
+        )
+
+    def reset_memory(self) -> None:
+        self.memory.clear()
+        self.pending_action = None
+        self.pending_screen_description = ""
+
+    def forget_last(self) -> None:
+        if self.memory:
+            self.memory.pop()
 
 
 class BrowserActionRunner:
@@ -215,57 +316,38 @@ def handle_prompt(request: PromptRequest) -> PromptResponse:
         return PromptResponse(say="", run_in_background=False, actions=[], status="ignored")
 
     with state.lock:
+        control_response = handle_control_command(text)
+        if control_response is not None:
+            return control_response
+
         if state.pending_action and is_approval(text):
             return execute_pending_action(text)
 
-        screen_description = describe_current_screen(text)
         try:
-            decision = choose_decision(text, screen_description)
+            decision = choose_decision(text)
         except Exception as exc:
             say = "I could not think that through because the assistant service had a problem."
-            state.remember(
-                {
-                    "source": request.source,
-                    "user_prompt": text,
-                    "screen": screen_description,
-                    "say": say,
-                    "actions": [],
-                    "action_result": str(exc),
-                    "status": "error",
-                    "time": int(time.time()),
-                }
-            )
+            state.remember(f"Request failed: {text}", request.source, "error", str(exc))
             return PromptResponse(say=say, run_in_background=False, actions=[], status="error")
 
         actions = decision.get("actions", [])
         run_in_background = bool(decision.get("run_in_background"))
         say = str(decision.get("say") or "")
         status = "ok"
+        memory_note = str(decision.get("memory_note") or "")
 
         action_result = ""
         if run_in_background and actions:
             action = actions[0]
-            if should_require_approval(action, screen_description):
+            if should_require_approval(action):
                 state.pending_action = action
-                state.pending_screen_description = screen_description
                 say = say or "That could affect something important. Please say yes if you want me to continue."
                 status = "approval_required"
             else:
                 action_result = execute_action(action)
                 status = "acted"
 
-        state.remember(
-            {
-                "source": request.source,
-                "user_prompt": text,
-                "screen": screen_description,
-                "say": say,
-                "actions": actions[:1],
-                "action_result": action_result,
-                "status": status,
-                "time": int(time.time()),
-            }
-        )
+        state.remember(memory_note or f"User asked: {text}", request.source, status, action_result)
         return PromptResponse(say=say, run_in_background=run_in_background, actions=actions[:1], status=status)
 
 
@@ -284,60 +366,65 @@ def execute_pending_action(approval_text: str) -> PromptResponse:
         say = "I tried, but that did not work."
         status = "error"
 
-    state.remember(
-        {
-            "source": "approval",
-            "user_prompt": approval_text,
-            "screen": state.pending_screen_description,
-            "say": say,
-            "actions": [action],
-            "action_result": result,
-            "status": status,
-            "time": int(time.time()),
-        }
-    )
+    state.remember(f"Approved action: {action.get('action')}", "approval", status, result)
     return PromptResponse(say=say, run_in_background=True, actions=[action], status=status)
 
 
-def describe_current_screen(question: str) -> str:
+def choose_decision(user_prompt: str) -> dict[str, Any]:
+    try:
+        from openai import OpenAI
+    except ImportError as exc:
+        raise RuntimeError("Missing dependency: install the OpenAI Python SDK.") from exc
+
     api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
-        return "Screen context is unavailable because OPENAI_API_KEY is not set."
+        raise RuntimeError("Missing OPENAI_API_KEY.")
 
-    screenshots = state.screen_buffer.snapshot()
-    if not screenshots:
-        if state.screen_buffer.last_error:
-            return f"Screen context is unavailable: {state.screen_buffer.last_error}"
-        try:
-            screenshots = [capture_screen()]
-        except Exception as exc:
-            return f"Screen context is unavailable: {exc}"
+    screenshot = newest_screenshot_for_prompt(user_prompt)
+    user_content: list[dict[str, Any]] = [
+        {
+            "type": "input_text",
+            "text": json.dumps(
+                {
+                    "user_prompt": user_prompt,
+                    "recent_memory": state.context_text(),
+                    "capabilities": CAPABILITIES,
+                    "screen_available": screenshot is not None,
+                    "screen_error": state.screen_buffer.last_error,
+                },
+                ensure_ascii=False,
+            ),
+        }
+    ]
+    if screenshot:
+        user_content.append({"type": "input_image", "image_url": screenshot})
 
-    try:
-        return describe_screen_context(
-            question=question,
-            image_sequence=screenshots,
-            model=os.getenv("VISION_MODEL", DEFAULT_MODEL),
-            api_key=api_key,
-            max_tokens=int(os.getenv("VISION_MAX_TOKENS", DEFAULT_VISION_MAX_TOKENS)),
-        )
-    except Exception as exc:
-        return f"Screen context is unavailable: {exc}"
-
-
-def choose_decision(user_prompt: str, screen_description: str) -> dict[str, Any]:
-    model = os.getenv("ASSISTANT_MODEL", "gpt-5.4-nano")
-    system_prompt = load_system_prompt()
-    user_input = build_input(user_prompt, screen_description, state.context_text())
-    decision = call_openai(system_prompt, user_input, model)
+    client = OpenAI(api_key=api_key)
+    response = client.responses.create(
+        model=os.getenv("ASSISTANT_MODEL", os.getenv("VISION_MODEL", DEFAULT_MODEL)),
+        input=[
+            {"role": "system", "content": DECISION_SYSTEM_PROMPT},
+            {"role": "user", "content": user_content},
+        ],
+        max_output_tokens=int(os.getenv("DECISION_MAX_TOKENS", DEFAULT_DECISION_MAX_TOKENS)),
+        text={
+            "format": {
+                "type": "json_schema",
+                "name": DECISION_SCHEMA["name"],
+                "schema": DECISION_SCHEMA["schema"],
+                "strict": DECISION_SCHEMA["strict"],
+            }
+        },
+    )
+    decision = json.loads(response.output_text)
     validate_actions(decision)
     return decision
 
 
-def should_require_approval(action: dict[str, Any], screen_description: str) -> bool:
+def should_require_approval(action: dict[str, Any]) -> bool:
     if action_has_risk(action):
         return True
-    combined = f"{screen_description}\n{json.dumps(action, ensure_ascii=False)}".lower()
+    combined = json.dumps(action, ensure_ascii=False).lower()
     return any(term in combined for term in HIGH_RISK_TERMS)
 
 
@@ -346,11 +433,63 @@ def is_approval(text: str) -> bool:
     return normalized in APPROVAL_PHRASES
 
 
+def handle_control_command(text: str) -> PromptResponse | None:
+    normalized = " ".join(text.lower().strip().split())
+    command = CONTROL_COMMANDS.get(normalized)
+    if command == "reset":
+        state.reset_memory()
+        return PromptResponse(say="Okay, I forgot the recent context.", run_in_background=False, actions=[], status="context_reset")
+    if command == "forget":
+        state.forget_last()
+        return PromptResponse(say="Okay, I forgot the last bit.", run_in_background=False, actions=[], status="context_forgot_last")
+    if command == "cancel":
+        state.pending_action = None
+        state.pending_screen_description = ""
+        return PromptResponse(say="Okay, cancelled.", run_in_background=False, actions=[], status="cancelled")
+    return None
+
+
 def execute_action(action: dict[str, Any]) -> str:
     try:
         return state.action_runner.execute_one(action)
     except Exception as exc:
         return f"Action failed: {exc}"
+
+
+def newest_screenshot_for_prompt(prompt: str) -> str | None:
+    screenshots = state.screen_buffer.snapshot()
+    image_bytes: bytes | None = screenshots[-1] if screenshots else None
+
+    if image_bytes is None:
+        try:
+            image_bytes = capture_screen()
+        except Exception as exc:
+            state.screen_buffer.set_error(exc)
+            return None
+
+    return image_bytes_to_data_url(image_bytes)
+
+
+def image_bytes_to_data_url(image_bytes: bytes) -> str:
+    image = Image.open(io.BytesIO(image_bytes))
+    image.thumbnail((int(os.getenv("SCREEN_MAX_WIDTH", DEFAULT_SCREEN_MAX_WIDTH)), DEFAULT_SCREEN_MAX_WIDTH))
+
+    buffer = io.BytesIO()
+    image.convert("RGB").save(
+        buffer,
+        format="JPEG",
+        quality=int(os.getenv("SCREEN_JPEG_QUALITY", "72")),
+        optimize=True,
+    )
+    encoded = base64.b64encode(buffer.getvalue()).decode("ascii")
+    return f"data:image/jpeg;base64,{encoded}"
+
+
+def compact_text(value: str, limit: int = 320) -> str:
+    text = " ".join(str(value or "").split())
+    if len(text) <= limit:
+        return text
+    return f"{text[:limit - 3].rstrip()}..."
 
 
 if __name__ == "__main__":

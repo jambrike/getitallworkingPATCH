@@ -5,6 +5,7 @@ const path = require('path');
 const { spawn } = require('child_process');
 
 const DEFAULT_COMPANION_URL = 'http://127.0.0.1:8765';
+const SPEAKING_COOLDOWN_MS = Number(process.env.VOICE_TTS_COOLDOWN_MS || 1500);
 const ROOT_ENV = path.join(__dirname, '..', '.env');
 const OVERLAY_ROOT = path.join(__dirname, '..', 'overlay + TTS');
 const TTS_CLI = path.join(OVERLAY_ROOT, 'src', 'cli', 'say.js');
@@ -19,6 +20,8 @@ const DEFAULT_TTS_NODE = path.join(
 );
 
 loadEnvFile(ROOT_ENV);
+
+let speakingUntil = 0;
 
 async function sendToAI(text) {
   const prompt = String(text || '').trim();
@@ -45,6 +48,7 @@ function companionUrl() {
 }
 
 function speakWithOpenAITTS(text) {
+  markSpeaking();
   const child = spawn(ttsNodeCommand(), [TTS_CLI, text], {
     cwd: OVERLAY_ROOT,
     env: process.env,
@@ -61,16 +65,26 @@ function speakWithOpenAITTS(text) {
 
   child.on('error', (err) => {
     console.error('Failed to start OpenAI TTS:', err.message);
+    markSpeaking(SPEAKING_COOLDOWN_MS);
   });
 
   child.on('close', (code) => {
+    markSpeaking(SPEAKING_COOLDOWN_MS);
     if (code !== 0) {
       console.error(`OpenAI TTS exited with code ${code}`);
     }
   });
 }
 
-module.exports = { sendToAI };
+function isAssistantSpeaking() {
+  return Date.now() < speakingUntil;
+}
+
+function markSpeaking(durationMs = 60 * 60 * 1000) {
+  speakingUntil = Date.now() + durationMs;
+}
+
+module.exports = { sendToAI, isAssistantSpeaking };
 
 function ttsNodeCommand() {
   if (process.env.OPENAI_TTS_NODE) {
