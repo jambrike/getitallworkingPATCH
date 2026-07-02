@@ -89,6 +89,6 @@ These rules define how the screen description workflow should behave.
 - Assume screenshots may contain sensitive information.
 - Avoid saving images by default.
 - Keep API keys in environment variables, not in files.
-- Use `GEMINI_API_KEY` for Gemini access.
+- Use `OPENAI_API_KEY` for OpenAI access.
 - Review saved screenshots before sharing the project folder.
 - Keep `docs/` limited to human-readable documentation.

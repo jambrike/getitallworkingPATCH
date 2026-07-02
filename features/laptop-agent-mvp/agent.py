@@ -64,10 +64,10 @@ class BrowserAgent:
     def __init__(self, outputs_dir: Path, console: Console | None = None) -> None:
         self.outputs_dir = outputs_dir
         self.console = console or Console()
-        api_key = os.getenv("OPENROUTER_API_KEY") or os.getenv("OPENAI_API_KEY")
+        api_key = os.getenv("OPENAI_API_KEY")
         base_url = os.getenv("OPENAI_BASE_URL")
         self.client = OpenAI(api_key=api_key, base_url=base_url)
-        self.model = os.getenv("OPENAI_MODEL", "openrouter/auto")
+        self.model = os.getenv("OPENAI_MODEL", os.getenv("ASSISTANT_MODEL", "gpt-5.4-nano"))
         self.history: list[dict[str, Any]] = []
 
     def run(self, task: str) -> None:

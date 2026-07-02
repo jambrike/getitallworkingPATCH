@@ -22,7 +22,7 @@ from pathlib import Path
 from typing import Any
 
 
-DEFAULT_MODEL = os.environ.get("ASSISTANT_MODEL", "gpt-4.1-mini")
+DEFAULT_MODEL = os.environ.get("ASSISTANT_MODEL", "gpt-5.4-nano")
 
 CAPABILITIES = [
     {"action": "open_url", "url": "https://example.com"},
@@ -77,7 +77,7 @@ JSON_SCHEMA: dict[str, Any] = {
 
 
 def load_system_prompt() -> str:
-    return Path("agent_prompt.md").read_text(encoding="utf-8")
+    return Path(__file__).with_name("agent_prompt.md").read_text(encoding="utf-8")
 
 
 DEFAULT_USER_FILE = "user.txt"

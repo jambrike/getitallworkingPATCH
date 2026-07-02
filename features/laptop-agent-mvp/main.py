@@ -13,9 +13,9 @@ def main() -> None:
     load_dotenv()
     console = Console()
 
-    if not (os.getenv("OPENROUTER_API_KEY") or os.getenv("OPENAI_API_KEY")):
+    if not os.getenv("OPENAI_API_KEY"):
         console.print(
-            "[red]Missing API key. Set OPENROUTER_API_KEY or OPENAI_API_KEY in .env.[/red]"
+            "[red]Missing API key. Set OPENAI_API_KEY in the root .env.[/red]"
         )
         raise SystemExit(1)
 

@@ -1,20 +1,17 @@
 # SILIA
 
-Voice assistant prototype using Vosk speech recognition, OpenRouter for AI responses, and Google Text-to-Speech playback.
+Voice assistant prototype using local Vosk speech recognition. AI responses now come from the local companion service, and speech playback uses the shared OpenAI TTS module in `overlay + TTS`.
 
 ## Setup
 
 Install the Node dependencies:
 
 ```bash
-npm install vosk mic axios
+nvm use 16
+npm install
 ```
 
-Install the Python TTS dependencies:
-
-```bash
-python3 -m pip install gtts pygame
-```
+The Vosk npm package uses an older native binding, so this repo should run on Node 16.
 
 Download the Vosk English model:
 
@@ -22,16 +19,17 @@ Download the Vosk English model:
 bash scripts/install-vosk-model.sh
 ```
 
-Set your OpenRouter key:
+Set your OpenAI key in the workspace root `.env`, then start the companion service:
 
 ```bash
-export OPENROUTER_API_KEY="your_key_here"
+cd ..
+./run-companion.sh
 ```
 
-Run Silia:
+Run Silia separately, or start it with the root launcher by setting `START_VOICE=1`:
 
 ```bash
 node index.js
 ```
 
-Say `click`, then ask your question. You can also say the question in one go, like `click what is two plus two`.
+Say `grandson`, then ask your question. You can also say the question in one go, like `grandson what is two plus two`.

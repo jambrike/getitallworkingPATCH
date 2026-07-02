@@ -14,6 +14,25 @@ It returns:
 - whether to run background work
 - one or more allowed browser/file actions
 
+It also now contains `companion_service.py`, the FastAPI service that connects overlay input, Vosk voice input, screenshot context, the decision layer, browser/file actions, and OpenAI TTS clients.
+
+## Run The Integrated Service
+
+From the workspace root:
+
+```bash
+cp .env.example .env
+# edit .env and set OPENAI_API_KEY
+python3 -m pip install -r agent/requirements.txt
+python3 -m uvicorn agent.companion_service:app --host 127.0.0.1 --port 8765
+```
+
+The full app launcher is:
+
+```bash
+./run-companion.sh
+```
+
 ## Files
 
 - `agent_prompt.md`: the system prompt and behavior rules
@@ -27,7 +46,7 @@ export OPENAI_API_KEY="your-api-key"
 python simple_agent.py
 ```
 
-By default it reads:
+For the standalone decision script, by default it reads:
 
 - `user.txt`
 - `screen.txt`

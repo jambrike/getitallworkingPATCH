@@ -5,7 +5,7 @@ const mic = require('mic');
 const { sendToAI } = require('./airesponse'); // separate AI module
 
 const MODEL_PATH = path.join(__dirname, 'model'); // Vosk model folder
-const WAKE_WORD = 'click';
+const WAKE_WORD = 'grandson';
 
 // ---- Check model exists ----
 if (!fs.existsSync(MODEL_PATH)) {
