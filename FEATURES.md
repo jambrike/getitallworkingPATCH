@@ -3,6 +3,8 @@
 ## Working Features
 
 - Floating Electron overlay for typed prompts.
+- Overlay reply bubble that shows the latest assistant answer above the input.
+- Overlay Send and Speak buttons, with Enter as a send shortcut.
 - Spoken replies using OpenAI TTS.
 - Local Vosk voice listener with the `grandson + question` wake phrase.
 - In-memory screenshot buffer for screen context.

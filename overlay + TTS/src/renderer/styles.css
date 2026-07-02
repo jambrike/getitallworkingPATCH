@@ -50,10 +50,10 @@ textarea {
 }
 
 .overlay-shell {
-  width: 340px;
-  height: 188px;
+  width: 360px;
+  height: 248px;
   display: grid;
-  grid-template-columns: 112px 1fr;
+  grid-template-columns: 104px 1fr;
   overflow: hidden;
   border: 1px solid var(--line);
   border-radius: 30px;
@@ -61,6 +61,16 @@ textarea {
   box-shadow:
     inset 0 0 0 1px rgba(255, 255, 255, 0.78),
     0 18px 45px var(--shadow);
+  transition:
+    width 260ms ease,
+    height 260ms ease,
+    box-shadow 260ms ease;
+}
+
+.overlay-shell.has-reply {
+  width: 400px;
+  height: min(368px, 100vh);
+  grid-template-columns: 106px 1fr;
 }
 
 .mascot-panel {
@@ -183,9 +193,14 @@ textarea {
 
 .note-panel {
   display: grid;
-  grid-template-rows: 46px 1fr;
+  grid-template-rows: 40px 0fr minmax(78px, 1fr) 36px;
+  gap: 8px;
   min-width: 0;
   padding: 10px 12px 12px 10px;
+}
+
+.overlay-shell.has-reply .note-panel {
+  grid-template-rows: 40px minmax(54px, auto) minmax(72px, 1fr) 36px;
 }
 
 .toolbar {
@@ -208,6 +223,30 @@ textarea {
   font-size: 12px;
   font-weight: 700;
   line-height: 1;
+}
+
+.assistant-reply {
+  min-width: 0;
+  max-height: 116px;
+  margin: 0;
+  overflow: hidden;
+  padding: 0 2px;
+  color: #304153;
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1.32;
+  opacity: 0;
+  transform: translateY(8px);
+  transition:
+    opacity 220ms ease,
+    transform 220ms ease,
+    max-height 260ms ease;
+  user-select: text;
+}
+
+.overlay-shell.has-reply .assistant-reply {
+  opacity: 1;
+  transform: translateY(0);
 }
 
 .window-actions {
@@ -255,12 +294,13 @@ textarea {
   height: 100%;
   resize: none;
   border: 1px solid var(--soft-line);
-  border-radius: 20px;
-  padding: 12px 13px;
+  border-radius: 16px;
+  padding: 10px 12px;
   color: var(--ink);
   background: #ffffff;
   outline: none;
-  line-height: 1.35;
+  font-size: 14px;
+  line-height: 1.32;
   user-select: text;
 }
 
@@ -271,6 +311,43 @@ textarea {
 
 .helper-text::placeholder {
   color: var(--muted);
+}
+
+.prompt-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  min-width: 0;
+}
+
+.prompt-actions button {
+  min-width: 0;
+  height: 34px;
+  border-radius: 14px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 750;
+  line-height: 1;
+}
+
+.primary-action {
+  border: 1px solid rgba(58, 138, 116, 0.48);
+  color: #173c33;
+  background: #99ead0;
+}
+
+.primary-action:hover {
+  background: #84dfc3;
+}
+
+.secondary-action {
+  border: 1px solid var(--soft-line);
+  color: var(--ink);
+  background: #ffffff;
+}
+
+.secondary-action:hover {
+  border-color: var(--line);
 }
 
 .expand-button {

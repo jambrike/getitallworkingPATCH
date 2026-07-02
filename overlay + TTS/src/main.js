@@ -21,8 +21,8 @@ function createOverlayWindow() {
   const { width: displayWidth } = primaryDisplay.workAreaSize;
 
   overlayWindow = new BrowserWindow({
-    width: 360,
-    height: 210,
+    width: 380,
+    height: 270,
     x: Math.max(24, displayWidth - 390),
     y: 72,
     type: process.platform === 'darwin' ? 'panel' : undefined,
@@ -89,7 +89,7 @@ ipcMain.on('overlay:shrink', () => {
 
 ipcMain.on('overlay:expand', () => {
   if (!overlayWindow) return;
-  overlayWindow.setSize(360, 210, true);
+  overlayWindow.setSize(380, 270, true);
 });
 
 ipcMain.on('overlay:input', async (_event, value) => {
@@ -112,6 +112,8 @@ ipcMain.on('overlay:input', async (_event, value) => {
       return;
     }
 
+    sendOverlayReply(say);
+    resizeForReply(say);
     sendOverlayStatus('speaking');
     await speak(say);
     sendOverlayStatus('listening');
@@ -121,7 +123,41 @@ ipcMain.on('overlay:input', async (_event, value) => {
   }
 });
 
+ipcMain.on('overlay:speak-text', async (_event, value) => {
+  const text = preprocessText(value);
+
+  if (!text) {
+    console.log('[overlay speak] Empty input ignored.');
+    return;
+  }
+
+  sendOverlayReply(text);
+  resizeForReply(text);
+  sendOverlayStatus('speaking');
+
+  try {
+    await speak(text);
+    sendOverlayStatus('listening');
+  } catch (error) {
+    sendOverlayStatus('error');
+    console.error(`[overlay tts] ${error.message || 'Text-to-speech failed.'}`);
+  }
+});
+
 function sendOverlayStatus(status) {
   if (!overlayWindow) return;
   overlayWindow.webContents.send('overlay:status', status);
+}
+
+function sendOverlayReply(text) {
+  if (!overlayWindow) return;
+  overlayWindow.webContents.send('overlay:reply', text);
+}
+
+function resizeForReply(text) {
+  if (!overlayWindow) return;
+
+  const textLength = text.length;
+  const targetHeight = Math.min(390, Math.max(310, 280 + Math.ceil(textLength / 75) * 24));
+  overlayWindow.setSize(420, targetHeight, true);
 }

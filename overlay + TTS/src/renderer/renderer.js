@@ -1,7 +1,10 @@
 const helperText = document.querySelector('#helperText');
+const assistantReply = document.querySelector('#assistantReply');
 const closeButton = document.querySelector('#closeButton');
 const minimizeButton = document.querySelector('#minimizeButton');
 const expandButton = document.querySelector('#expandButton');
+const speakButton = document.querySelector('#speakButton');
+const sendButton = document.querySelector('#sendButton');
 const shell = document.querySelector('.overlay-shell');
 const statusDot = document.querySelector('#statusDot');
 const statusText = document.querySelector('#statusText');
@@ -18,9 +21,18 @@ helperText.addEventListener('keydown', (event) => {
   if (event.key !== 'Enter' || event.shiftKey) return;
 
   event.preventDefault();
-  window.overlayControls.printInput(helperText.value);
-  helperText.value = '';
-  localStorage.setItem(NOTE_STORAGE_KEY, '');
+  sendPrompt();
+});
+
+sendButton.addEventListener('click', () => {
+  sendPrompt();
+});
+
+speakButton.addEventListener('click', () => {
+  const text = helperText.value.trim();
+  if (!text) return;
+
+  window.overlayControls.speakText(text);
 });
 
 closeButton.addEventListener('click', () => {
@@ -43,6 +55,25 @@ expandButton.addEventListener('click', () => {
 window.overlayControls.onStatus((status) => {
   setStatus(status);
 });
+
+window.overlayControls.onReply((text) => {
+  showReply(text);
+});
+
+function sendPrompt() {
+  const text = helperText.value.trim();
+  if (!text) return;
+
+  window.overlayControls.printInput(text);
+  helperText.value = '';
+  localStorage.setItem(NOTE_STORAGE_KEY, '');
+}
+
+function showReply(text) {
+  const cleanedText = String(text || '').trim();
+  assistantReply.textContent = cleanedText;
+  shell.classList.toggle('has-reply', Boolean(cleanedText));
+}
 
 function setStatus(status) {
   const labels = {

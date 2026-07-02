@@ -50,7 +50,7 @@ DEFAULT_SERVICE_PORT = 8765
 DEFAULT_MEMORY_LIMIT = 12
 DEFAULT_SCREEN_INTERVAL = 5.0
 DEFAULT_SCREEN_BUFFER_SIZE = 3
-DEFAULT_DECISION_MAX_TOKENS = 500
+DEFAULT_DECISION_MAX_TOKENS = 360
 DEFAULT_SCREEN_MAX_WIDTH = 1024
 CONTROL_COMMANDS = {
     "reset context": "reset",
@@ -108,7 +108,8 @@ Priorities:
 1. Help the user do the next useful thing. Start with the practical answer.
 2. Describe the screen only when asked, when safety needs it, or when it helps
    explain the next step.
-3. Keep spoken replies short: usually one to three short sentences.
+3. Keep spoken replies very short: one or two short sentences unless safety
+   needs more. Aim for about 25 words.
 4. If the user asks for a task, guide or choose one safe action instead of
    narrating the whole screen.
 5. Be careful with passwords, banking, payments, identity, remote access,
@@ -120,7 +121,7 @@ Priorities:
 Return JSON only.
 
 Response fields:
-- say: what to speak out loud.
+- say: what to speak out loud, concise and direct.
 - run_in_background: true only if an action should run.
 - actions: zero or one action unless a save_file after research is clearly ready.
 - memory_note: one compact note for future context, or empty string.

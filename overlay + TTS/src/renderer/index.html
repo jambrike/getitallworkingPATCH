@@ -32,6 +32,7 @@
             <button id="closeButton" type="button" aria-label="Quit overlay">×</button>
           </div>
         </header>
+        <p id="assistantReply" class="assistant-reply" aria-live="polite"></p>
         <label class="sr-only" for="helperText">Helper text</label>
         <textarea
           id="helperText"
@@ -39,6 +40,10 @@
           spellcheck="true"
           placeholder="How can I help?"
         ></textarea>
+        <div class="prompt-actions no-drag" aria-label="Prompt actions">
+          <button id="speakButton" class="secondary-action" type="button">Speak</button>
+          <button id="sendButton" class="primary-action" type="button">Send</button>
+        </div>
       </section>
     </main>
 
