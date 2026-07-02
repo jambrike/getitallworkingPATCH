@@ -53,11 +53,23 @@ DEFAULT_SCREEN_INTERVAL = 5.0
 DEFAULT_SCREEN_BUFFER_SIZE = 3
 DEFAULT_DECISION_MAX_TOKENS = 360
 DEFAULT_SCREEN_MAX_WIDTH = 1024
+DEFAULT_MAX_ACTIONS_PER_PROMPT = 3
 CONTROL_COMMANDS = {
     "reset context": "reset",
     "forget that": "forget",
     "cancel": "cancel",
 }
+OPEN_SITE_VERBS = r"(?:open up|open|go to|launch|bring up|show me)"
+OPEN_TARGET_CLEANUPS = (
+    "for me",
+    "please",
+    "the website",
+    "website",
+    "the site",
+    "site",
+    "the app",
+    "app",
+)
 KNOWN_SITES = {
     "youtube": "https://www.youtube.com",
     "you tube": "https://www.youtube.com",
@@ -66,6 +78,19 @@ KNOWN_SITES = {
     "github": "https://github.com",
     "spotify": "https://open.spotify.com",
     "netflix": "https://www.netflix.com",
+    "amazon": "https://www.amazon.com",
+    "bbc": "https://www.bbc.com",
+    "rte": "https://www.rte.ie",
+    "rté": "https://www.rte.ie",
+    "hse": "https://www.hse.ie",
+    "facebook": "https://www.facebook.com",
+    "instagram": "https://www.instagram.com",
+    "tiktok": "https://www.tiktok.com",
+    "x": "https://x.com",
+    "twitter": "https://x.com",
+    "outlook": "https://outlook.live.com",
+    "hotmail": "https://outlook.live.com",
+    "yahoo": "https://www.yahoo.com",
 }
 DECISION_SCHEMA: dict[str, Any] = {
     "name": "companion_decision",
@@ -126,15 +151,16 @@ Priorities:
    urgent warnings, messages, downloads, uploads, deletion, and purchases.
 6. Never repeat private details from the screen. Refer to them generally.
 7. Use only the actions listed in the input.
-8. Prefer a single useful next action. Do not create long speculative plans.
-9. If the user asks to open a known website, use open_url with a full https URL.
+8. Prefer one useful next action, but you may return up to three safe actions
+   for simple browser tasks.
+9. If the user asks to open a website, use open_url with a full https URL.
 
 Return JSON only.
 
 Response fields:
 - say: what to speak out loud, concise and direct.
 - run_in_background: true only if an action should run.
-- actions: zero or one action unless a save_file after research is clearly ready.
+- actions: zero to three actions. Keep them safe and directly useful.
 - memory_note: one compact note for future context, or empty string.
 - needs_action: true if the user wants something done or guided.
 - status: short machine-readable status such as ok, acted, needs_clarification,
@@ -370,24 +396,42 @@ def execute_pending_action(approval_text: str) -> PromptResponse:
 
 def execute_decision(source: str, text: str, decision: dict[str, Any]) -> PromptResponse:
     actions = decision.get("actions", [])
+    action_limit = int(os.getenv("MAX_ACTIONS_PER_PROMPT", DEFAULT_MAX_ACTIONS_PER_PROMPT))
+    requested_actions = actions[:action_limit]
     run_in_background = bool(decision.get("run_in_background"))
     say = str(decision.get("say") or "")
     status = str(decision.get("status") or "ok")
     memory_note = str(decision.get("memory_note") or "")
 
-    action_result = ""
-    if run_in_background and actions:
-        action = actions[0]
-        if should_require_approval(action):
-            state.pending_action = action
-            say = say or "That could affect something important. Please say yes if you want me to continue."
-            status = "approval_required"
-        else:
-            action_result = execute_action(action)
+    action_results: list[str] = []
+    completed_actions: list[dict[str, Any]] = []
+    if run_in_background and requested_actions:
+        for action in requested_actions:
+            if should_require_approval(action):
+                state.pending_action = action
+                completed_actions.append(action)
+                say = say or "That could affect something important. Please say yes if you want me to continue."
+                status = "approval_required"
+                break
+
+            result = execute_action(action)
+            completed_actions.append(action)
+            action_results.append(result)
             status = "acted"
 
+            if result.lower().startswith("action failed:"):
+                break
+
+    action_result = " | ".join(action_results)
+    if state.pending_action is not None and not action_result:
+        action_result = "Waiting for approval."
+    if state.pending_action is not None:
+        status = "approval_required"
+        if not say:
+            say = say or "That could affect something important. Please say yes if you want me to continue."
+
     state.remember(memory_note or f"User asked: {text}", source, status, action_result)
-    return PromptResponse(say=say, run_in_background=run_in_background, actions=actions[:1], status=status)
+    return PromptResponse(say=say, run_in_background=run_in_background, actions=completed_actions, status=status)
 
 
 def choose_decision(user_prompt: str) -> dict[str, Any]:
@@ -443,7 +487,7 @@ def choose_decision(user_prompt: str) -> dict[str, Any]:
 
 def direct_site_open_decision(text: str) -> dict[str, Any] | None:
     normalized = " ".join(text.lower().split())
-    if not re.search(r"\b(open|go to|launch|bring up|show me)\b", normalized):
+    if not re.search(rf"\b{OPEN_SITE_VERBS}\b", normalized):
         return None
 
     for site_name, url in KNOWN_SITES.items():
@@ -457,7 +501,7 @@ def direct_site_open_decision(text: str) -> dict[str, Any] | None:
                 "status": "ok",
             }
 
-    domain_match = re.search(r"\b([a-z0-9-]+\.(?:com|org|net|ie|co\.uk))\b", normalized)
+    domain_match = re.search(r"\b([a-z0-9-]+(?:\.[a-z0-9-]+)*\.(?:com|org|net|ie|co\.uk|co|edu|gov|tv|io|ai|app))\b", normalized)
     if domain_match:
         domain = domain_match.group(1)
         return {
@@ -469,7 +513,47 @@ def direct_site_open_decision(text: str) -> dict[str, Any] | None:
             "status": "ok",
         }
 
+    target = extract_open_target(normalized)
+    if target:
+        guessed_domain = slugify_site_target(target)
+        if guessed_domain:
+            return {
+                "say": f"Opening {target.title()}.",
+                "run_in_background": True,
+                "actions": [{"action": "open_url", "url": f"https://www.{guessed_domain}.com"}],
+                "memory_note": f"User asked to open {target}.",
+                "needs_action": True,
+                "status": "ok",
+            }
+
     return None
+
+
+def extract_open_target(text: str) -> str:
+    match = re.search(rf"\b{OPEN_SITE_VERBS}\b\s+(.+)$", text)
+    if not match:
+        return ""
+
+    target = match.group(1).strip(" ?!.,")
+    changed = True
+    while changed:
+        changed = False
+        for cleanup in OPEN_TARGET_CLEANUPS:
+            if target.endswith(f" {cleanup}"):
+                target = target[: -len(cleanup) - 1].strip(" ?!.,")
+                changed = True
+            elif target == cleanup:
+                return ""
+
+    target = re.sub(r"^(?:the|a|an)\s+", "", target)
+    return target.strip(" ?!.,")
+
+
+def slugify_site_target(target: str) -> str:
+    words = re.findall(r"[a-z0-9]+", target.lower())
+    if not words or len(words) > 4:
+        return ""
+    return "".join(words)
 
 
 def should_require_approval(action: dict[str, Any]) -> bool:

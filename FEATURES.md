@@ -18,6 +18,8 @@
   - search the web
   - open a URL
   - open common sites like YouTube or Netflix directly from commands such as "open YouTube"
+  - open arbitrary website names by guessing the normal `.com` address, such as "open Amazon"
+  - run up to three safe browser/file actions from one prompt
   - read visible page text
   - click visible text
   - type into a selector
