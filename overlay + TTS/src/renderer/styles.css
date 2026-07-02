@@ -11,9 +11,9 @@
   --mint: #75d6b6;
   --coral: #ff8f7c;
   --lemon: #ffd766;
-  --button-blue: #dff9fb;
-  --button-blue-hover: #c8f1f5;
-  --button-blue-line: rgba(70, 170, 184, 0.26);
+  --button-blue: #f3fdff;
+  --button-blue-hover: #e5f8fb;
+  --button-blue-line: rgba(92, 184, 195, 0.18);
   --shadow: rgba(35, 49, 63, 0.18);
 }
 
@@ -329,13 +329,13 @@ textarea {
   border: 1px solid var(--button-blue-line);
   border-radius: 14px;
   cursor: pointer;
-  color: #21474e;
+  color: #315d64;
   background: var(--button-blue);
   font-family:
-    "SF Pro Rounded", "Avenir Next", "Nunito Sans", ui-rounded, -apple-system,
-    BlinkMacSystemFont, "Segoe UI", sans-serif;
+    "Avenir Next", "SF Pro Text", -apple-system, BlinkMacSystemFont, "Segoe UI",
+    sans-serif;
   font-size: 13px;
-  font-weight: 760;
+  font-weight: 600;
   line-height: 1;
   letter-spacing: 0;
   box-shadow: 0 1px 2px rgba(35, 49, 63, 0.06);
