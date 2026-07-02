@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Helper Overlay</title>
+    <link rel="stylesheet" href="./styles.css" />
+  </head>
+  <body>
+    <main class="overlay-shell" aria-label="Floating helper overlay">
+      <section class="mascot-panel drag-region" aria-label="Mascot">
+        <div class="mascot" aria-hidden="true">
+          <div class="ear ear-left"></div>
+          <div class="ear ear-right"></div>
+          <div class="face">
+            <span class="eye eye-left"></span>
+            <span class="eye eye-right"></span>
+            <span class="cheek cheek-left"></span>
+            <span class="cheek cheek-right"></span>
+            <span class="smile"></span>
+          </div>
+        </div>
+        <div class="status-dot" title="Floating on top"></div>
+      </section>
+
+      <section class="note-panel">
+        <header class="toolbar drag-region">
+          <span class="handle" aria-hidden="true"></span>
+          <div class="window-actions no-drag">
+            <button id="minimizeButton" type="button" aria-label="Make overlay smaller">−</button>
+            <button id="closeButton" type="button" aria-label="Quit overlay">×</button>
+          </div>
+        </header>
+        <label class="sr-only" for="helperText">Helper text</label>
+        <textarea
+          id="helperText"
+          class="helper-text no-drag"
+          spellcheck="true"
+          placeholder="How can I help?"
+        ></textarea>
+      </section>
+    </main>
+
+    <button id="expandButton" class="expand-button no-drag" type="button" aria-label="Expand overlay">
+      +
+    </button>
+
+    <script src="./renderer.js"></script>
+  </body>
+</html>

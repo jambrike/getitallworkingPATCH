@@ -1,0 +1,25 @@
+{
+  "name": "old-people-helper-overlay",
+  "version": "1.0.0",
+  "description": "A small always-on-top Electron overlay with a cute mascot and note box.",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron .",
+    "say": "node src/cli/say.js"
+  },
+  "keywords": [
+    "electron",
+    "overlay",
+    "assistant",
+    "mascot"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "openai": "6.45.0"
+  },
+  "devDependencies": {
+    "electron": "^35.7.5"
+  }
+}
