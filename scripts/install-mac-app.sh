@@ -8,8 +8,14 @@ MACOS_DIR="$CONTENTS_DIR/MacOS"
 RESOURCES_DIR="$CONTENTS_DIR/Resources"
 EXECUTABLE="$MACOS_DIR/Grandson"
 PLIST="$CONTENTS_DIR/Info.plist"
+ICON_SOURCE="$ROOT_DIR/assets/Grandson.icns"
+ICON_DEST="$RESOURCES_DIR/Grandson.icns"
 
 mkdir -p "$MACOS_DIR" "$RESOURCES_DIR"
+
+if [[ -f "$ICON_SOURCE" ]]; then
+  cp "$ICON_SOURCE" "$ICON_DEST"
+fi
 
 cat >"$PLIST" <<'PLIST'
 <?xml version="1.0" encoding="UTF-8"?>
@@ -21,6 +27,8 @@ cat >"$PLIST" <<'PLIST'
   <key>CFBundleDisplayName</key>
   <string>Grandson</string>
   <key>CFBundleExecutable</key>
+  <string>Grandson</string>
+  <key>CFBundleIconFile</key>
   <string>Grandson</string>
   <key>CFBundleIdentifier</key>
   <string>local.grandson.companion</string>
